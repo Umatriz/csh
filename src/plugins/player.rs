@@ -1,6 +1,7 @@
 use bevy::{
     app::{Plugin, Startup, Update},
     ecs::{
+        bundle::Bundle,
         component::Component,
         query::With,
         system::{Commands, Query, Res},
@@ -12,6 +13,8 @@ use bevy::{
     transform::components::Transform,
 };
 
+use super::crafting::Inventory;
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
@@ -21,17 +24,25 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct Player;
 
+#[derive(Bundle, Default)]
+pub struct PlayerBundle {
+    pub player: Player,
+    pub inventory: Inventory,
+}
+
 fn spawn_player(mut commands: Commands) {
-    commands.spawn(Player).insert(SpriteBundle {
-        sprite: Sprite {
-            custom_size: Some(Vec2::new(15.0, 15.0)),
+    commands
+        .spawn(PlayerBundle::default())
+        .insert(SpriteBundle {
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(15.0, 15.0)),
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
-    });
+        });
 }
 
 fn player_movement(
