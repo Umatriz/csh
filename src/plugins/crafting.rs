@@ -13,18 +13,35 @@ pub struct Inventory {
     // inner: HashMap<>
 }
 
-#[derive(Bundle, Default, Hash, PartialEq, Eq)]
-pub struct ItemBundle {
-    pub item: Item,
-    pub modifiers: ItemModifiers,
-}
-
 // TODO: Separate into enum
 
 #[derive(Component, Hash, PartialEq, Eq)]
-pub struct Item {
+pub enum Item {
+    Single(ItemData),
+    Multiple(Vec<ItemData>),
+}
+
+impl Default for Item {
+    fn default() -> Self {
+        Self::Single(Default::default())
+    }
+}
+
+#[derive(Hash, PartialEq, Eq)]
+pub struct ItemData {
     pub name: String,
     pub kind: ItemKind,
+    pub modifiers: ItemModifiers,
+}
+
+impl Default for ItemData {
+    fn default() -> Self {
+        Self {
+            name: "TestItem".to_string(),
+            kind: ItemKind::Primitive,
+            modifiers: Default::default(),
+        }
+    }
 }
 
 #[derive(Default, Hash, PartialEq, Eq)]
@@ -34,16 +51,7 @@ pub enum ItemKind {
     Primitive,
 }
 
-impl Default for Item {
-    fn default() -> Self {
-        Self {
-            name: "TestItem".to_string(),
-            kind: ItemKind::Primitive,
-        }
-    }
-}
-
-#[derive(Component, Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq)]
 pub struct ItemProperties {}
 
 impl Default for ItemProperties {
@@ -52,7 +60,7 @@ impl Default for ItemProperties {
     }
 }
 
-#[derive(Component, Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq)]
 pub struct ItemModifiers {
     pub amount: u8,
     pub level: u8,
@@ -60,6 +68,15 @@ pub struct ItemModifiers {
 
 impl Default for ItemModifiers {
     fn default() -> Self {
+        Item::Multiple(vec![ItemData {
+            name: "Test".to_string(),
+            kind: ItemKind::Complex(ItemProperties {}),
+            modifiers: ItemModifiers {
+                amount: 1,
+                level: 1,
+            },
+        }]);
+
         Self {
             amount: 1,
             level: 1,
@@ -69,7 +86,7 @@ impl Default for ItemModifiers {
 
 pub trait WorkbenchTag {}
 
-pub type ItemsMap = HashMap<ItemBundle, ItemBundle>;
+pub type ItemsMap = HashMap<Item, Item>;
 
 #[derive(Component)]
 pub struct Workbench<T: WorkbenchTag> {
@@ -89,6 +106,11 @@ create_items_map! {
         level = 1
     } => item! {
         "2",
+        item_kind!(complex {}),
+        amount = 1,
+        level = 1;
+
+        "3",
         item_kind!(complex {}),
         amount = 1,
         level = 1
@@ -138,7 +160,7 @@ mod macros {
                     }
 
                     impl Workbench<[<$name Workbench>]> {
-                        pub fn craft<'a>(map: &'a [<$name WorkbenchMap>], item: &'a ItemBundle) -> Option<&'a ItemBundle> {
+                        pub fn craft<'a>(map: &'a [<$name WorkbenchMap>], item: &'a Item) -> Option<&'a Item> {
                             map.map.get(item)
                         }
                     }
@@ -176,16 +198,33 @@ mod macros {
             amount = $amount:literal,
             level = $level:literal
         ) => {
-            ItemBundle {
-                item: Item {
-                    name: $name.to_string(),
-                    kind: $kind,
-                },
+            Item::Single(ItemData {
+                name: $name.to_string(),
+                kind: $kind,
                 modifiers: ItemModifiers {
                     amount: $amount,
                     level: $level,
                 },
-            }
+            })
+        };
+        (
+            $(
+                $name:literal,
+                $kind:expr,
+                amount = $amount:literal,
+                level = $level:literal
+            );+
+        ) => {
+            Item::Multiple(vec![
+                $(ItemData {
+                    name: $name.to_string(),
+                    kind: $kind,
+                    modifiers: ItemModifiers {
+                        amount: $amount,
+                        level: $level,
+                    },
+                },)+
+            ])
         };
     }
     pub(crate) use item;
