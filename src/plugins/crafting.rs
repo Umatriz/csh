@@ -276,11 +276,11 @@ impl Inventory {
             .map
             .iter()
             .enumerate()
-            .filter(|opt| opt.1.is_some())
-            .map(|(id, opt)| (id, (*opt).unwrap()))
-            .map(|(id, entity)| (id, query.get(entity)))
-            .filter(|(_, res)| res.is_ok())
-            .map(|(id, res)| (id, res.unwrap()))
+            .filter_map(|(id, opt)| opt.map(|e| (id, e)))
+            .filter_map(|(id, entity)| {
+                let g = query.get(entity);
+                g.ok().map(|i| (id, i))
+            })
         {
             if item_ref == item {
                 return self.map.get_mut(id).and_then(|item| item.take());
