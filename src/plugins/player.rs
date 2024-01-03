@@ -1,5 +1,6 @@
 use bevy::{
     app::{Plugin, Startup, Update},
+    core::Name,
     ecs::{
         bundle::Bundle,
         component::Component,
@@ -31,11 +32,16 @@ pub struct Player;
 pub struct PlayerBundle {
     pub player: Player,
     pub inventory: Inventory,
+    pub properties: PlayerProperties,
 }
+
+#[derive(Component, Default)]
+pub struct PlayerProperties {}
 
 fn spawn_player(mut commands: Commands) {
     commands
         .spawn(PlayerBundle::default())
+        .insert(Name::new("Player"))
         .insert(SpriteBundle {
             sprite: Sprite {
                 custom_size: Some(Vec2::new(15.0, 15.0)),
