@@ -8,7 +8,7 @@ use bevy::{
         component::Component,
         entity::Entity,
         event::{Event, EventReader, EventWriter},
-        query::{self, With},
+        query::With,
         reflect::AppTypeRegistry,
         system::{Commands, Query, Res, ResMut, Resource},
     },
@@ -20,7 +20,6 @@ use bevy_inspector_egui::{
     egui::{self, Ui},
     quick::ResourceInspectorPlugin,
 };
-use paste::paste;
 use std::{marker::PhantomData, sync::Arc};
 
 use super::player::{Player, PlayerProperties};
@@ -131,25 +130,25 @@ fn craft_on_classical(
     mut player_query: Query<&mut Inventory, With<Player>>,
     workbench_query: Query<&Workbench<ClassicalWorkbench>>,
     workbench_map: Res<ClassicalWorkbenchMap>,
-    input_items_query: Query<&Item>,
+    mut items_query: Query<&mut Item>,
 ) {
     for event in event_message.read() {
         let mut player_inventory = player_query.get_single_mut().unwrap();
         let workbench = workbench_query.get_single().unwrap();
 
-        if let Some(layout) = player_inventory.take_layout(&input_items_query, &event.input_item) {
-            if let Some(craft_layout) = layout.into_craft_layout(&input_items_query) {
-                if let Some(layout) = workbench.craft(&workbench_map, &craft_layout) {
-                    player_inventory.add(layout)
+        if let Some(layout) =
+            player_inventory.take_layout(&items_query.to_readonly(), &event.input_item)
+        {
+            if let Some(craft_layout) = layout.into_craft_layout(&items_query.to_readonly()) {
+                if let Some(layout) = workbench.craft(&workbench_map.map, &craft_layout) {
+                    player_inventory.add_combine(&mut items_query, layout);
+                    // player_inventory.add(layout)
                 } else {
                     println!("fail3")
                 }
             } else {
                 println!("fail2")
             }
-            // if let Some(layout) = workbench.craft(&workbench_map, &event.input_item) {
-            //     player_inventory.add(layout)
-            // }
         } else {
             println!("fail1")
         }
@@ -315,10 +314,7 @@ impl Inventory {
         layout: &CraftLayout,
     ) -> Option<EntityLayout> {
         match layout {
-            CraftLayout::One(item) => {
-                println!("one");
-                self.take_linear_item(query, item).map(EntityLayout::One)
-            }
+            CraftLayout::One(item) => self.take_linear_item(query, item).map(EntityLayout::One),
             CraftLayout::Many(items) => {
                 let mut ids = vec![];
                 for item in items {
@@ -326,6 +322,7 @@ impl Inventory {
                         ids.push(id)
                     }
                 }
+
                 if !ids.is_empty() {
                     let mut layout_vec = vec![];
 
@@ -349,6 +346,7 @@ impl Inventory {
         self.map.get_mut(id).and_then(|opt| opt.take())
     }
 
+    #[deprecated]
     pub fn search(&self, item: Entity) -> Option<usize> {
         self.map.iter().filter_map(|i| *i).position(|i| i == item)
     }
@@ -392,6 +390,55 @@ impl Inventory {
         None
     }
 
+    pub fn search_condition(
+        &self,
+        query: &Query<&Item>,
+        condition: impl Fn(&Item) -> bool,
+    ) -> Option<usize> {
+        for (id, it) in self
+            .map
+            .iter()
+            .enumerate()
+            .filter_map(|(id, opt)| (*opt).map(|i| (id, i)))
+            .filter_map(|(id, entity)| query.get(entity).ok().map(|item| (id, item)))
+        {
+            if condition(it) {
+                return Some(id);
+            }
+        }
+        None
+    }
+
+    pub fn add_combine(&mut self, query: &mut Query<&mut Item>, entity_layout: EntityLayout) {
+        let entity_vec: Vec<Entity> = entity_layout.clone().into();
+        let items: Vec<Item> = entity_layout
+            .into_craft_layout_unsorted(&query.to_readonly())
+            // FIXME: Maybe we should remove it, I'm not sure
+            .unwrap()
+            .into();
+
+        for (item, entity) in items.into_iter().zip(entity_vec.into_iter()) {
+            if let Some((id, item_entity)) = self
+                .search_condition(&query.to_readonly(), |it| {
+                    it.name == item.name && it.kind == item.kind
+                })
+                .and_then(|id| self.take(id).map(|ent| (id, ent)))
+            {
+                println!("Modifying existing");
+                if let Ok(mut item_in_inventory) = query.get_mut(item_entity) {
+                    println!("Passed");
+                    item_in_inventory.modifiers.amount += item.modifiers.amount;
+                    self.map[id] = Some(item_entity);
+                } else {
+                    println!("Fail")
+                }
+            } else {
+                println!("Adding single entity");
+                self.add_single(entity)
+            }
+        }
+    }
+
     pub fn add(&mut self, layout: EntityLayout) {
         match layout {
             EntityLayout::One(entity) => self.add_single(entity),
@@ -399,11 +446,11 @@ impl Inventory {
         }
     }
 
-    pub fn add_single(&mut self, item: Entity) {
+    fn add_single(&mut self, item: Entity) {
         self.map.push(Some(item))
     }
 
-    pub fn add_vec(&mut self, vec: Vec<Entity>) {
+    fn add_vec(&mut self, vec: Vec<Entity>) {
         let mut new_vec = vec.into_iter().map(Some).collect::<Vec<_>>();
         self.map.append(&mut new_vec);
     }
@@ -415,6 +462,15 @@ pub enum CraftLayout {
     Many(Vec<Item>),
 }
 
+impl From<CraftLayout> for Vec<Item> {
+    fn from(val: CraftLayout) -> Self {
+        match val {
+            CraftLayout::One(item) => vec![item],
+            CraftLayout::Many(items) => items,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum EntityLayout {
     One(Entity),
@@ -423,18 +479,26 @@ pub enum EntityLayout {
 
 impl EntityLayout {
     pub fn into_craft_layout(self, query: &Query<&Item>) -> Option<CraftLayout> {
+        self.into_craft_layout_unsorted(query)
+            .map(|layout| match layout {
+                CraftLayout::One(_) => layout,
+                CraftLayout::Many(mut items) => {
+                    items.sort();
+                    CraftLayout::Many(items)
+                }
+            })
+    }
+
+    pub fn into_craft_layout_unsorted(self, query: &Query<&Item>) -> Option<CraftLayout> {
         match self {
             EntityLayout::One(entity) => query.get(entity).ok().cloned().map(CraftLayout::One),
-            EntityLayout::Many(entities) => Some(CraftLayout::Many({
-                let mut vec = entities
+            EntityLayout::Many(entities) => Some(CraftLayout::Many(
+                entities
                     .into_iter()
                     .filter_map(|entity| query.get(entity).ok())
                     .cloned()
-                    .collect::<Vec<_>>();
-
-                vec.sort();
-                vec
-            })),
+                    .collect::<Vec<_>>(),
+            )),
         }
     }
 }
@@ -444,6 +508,15 @@ impl From<EntityLayout> for Vec<EntityLayout> {
         match value {
             EntityLayout::One(data) => vec![EntityLayout::One(data)],
             EntityLayout::Many(data_vec) => data_vec.into_iter().map(EntityLayout::One).collect(),
+        }
+    }
+}
+
+impl From<EntityLayout> for Vec<Entity> {
+    fn from(value: EntityLayout) -> Self {
+        match value {
+            EntityLayout::One(data) => vec![data],
+            EntityLayout::Many(data_vec) => data_vec.into_iter().collect(),
         }
     }
 }
@@ -614,58 +687,32 @@ impl<T: WorkbenchTag> Workbench<T> {
     }
 }
 
+pub trait Craft {
+    fn craft(&self, map: &CraftsMap, layout: &CraftLayout) -> Option<EntityLayout> {
+        map.get(layout).cloned()
+    }
+}
+
+impl<T: WorkbenchTag> Craft for Workbench<T> {}
+
 create_workbench! {
     Classical
 }
 
 create_items_map! {
     ClassicalWorkbenchMap,
-    craft_layout![item! {
-        "1",
-        item_kind!(primitive),
-        amount = 1,
-        level = 1
-    }] => item! {
-            "2",
-            item_kind!(primitive),
-            amount = 1,
-            level = 1
-        },
-        item! {
-            "1",
-            item_kind!(primitive),
-            amount = 1,
-            level = 1
-        };
-        craft_layout![item! {
-            "1",
-            item_kind!(primitive),
-            amount = 1,
-            level = 1
-        },item! {
-            "2",
-            item_kind!(primitive),
-            amount = 1,
-            level = 1
-        }
 
-        ] => item! {
-                "3",
-                item_kind!(primitive),
-                amount = 1,
-                level = 1
-            }, item! {
-                "1",
-                item_kind!(primitive),
-                amount = 1,
-                level = 1
-            },
-            item! {
-                "2",
-                item_kind!(primitive),
-                amount = 1,
-                level = 1
-            }
+    item! { "1", item_kind!(primitive), amount = 1, level = 1 }
+    =>
+    item! { "2", item_kind!(primitive), amount = 1, level = 1 },
+    item! { "1", item_kind!(primitive), amount = 1, level = 1 };
+
+    item! { "1", item_kind!(primitive), amount = 1, level = 1 },
+    item! { "2", item_kind!(primitive), amount = 1, level = 1 }
+    =>
+    item! { "3", item_kind!(primitive), amount = 1, level = 1 },
+    item! { "1", item_kind!(primitive), amount = 1, level = 1 },
+    item! { "2", item_kind!(primitive), amount = 1, level = 1 }
 }
 
 mod macros {
@@ -708,12 +755,6 @@ mod macros {
                     #[derive(Resource)]
                     pub struct [<$name WorkbenchMap>] {
                         pub map: CraftsMap,
-                    }
-
-                    impl Workbench<[<$name Workbench>]> {
-                        pub fn craft(&self, map: &[<$name WorkbenchMap>], item: &CraftLayout) -> Option<EntityLayout> {
-                            map.map.get(item).cloned()
-                        }
                     }
                 )*
             }
@@ -768,7 +809,7 @@ mod macros {
             CraftLayout::One($item)
         };
         (
-            $($item:expr),*
+            $($item:expr),* $(,)?
         ) => {
             CraftLayout::Many({
                 let mut vec = vec![$($item,)*];
@@ -814,13 +855,13 @@ mod macros {
     macro_rules! create_items_map {
         (
             $name:ty,
-            $($in_item:expr => $($out_item:expr),*);*
+            $($($in_item:expr),* => $($out_item:expr),*);*
         ) => {
             impl $name {
                 fn new(commands: &mut Commands) -> Self {
                     Self {
                         map: HashMap::from([
-                            $( ($in_item, entity_layout![$( commands.spawn($out_item).id(), )*]),)*
+                            $( (craft_layout![$($in_item,)*], entity_layout![$( commands.spawn($out_item).id(), )*]),)*
                         ]),
                     }
                 }
@@ -828,14 +869,4 @@ mod macros {
         };
     }
     pub(crate) use create_items_map;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn item_convert_test() {
-        let c = vec![1];
-    }
 }
