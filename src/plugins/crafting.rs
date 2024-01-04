@@ -1,4 +1,6 @@
-use self::macros::{create_items_map, create_workbench, item, item_kind};
+use self::macros::{
+    craft_layout, create_items_map, create_workbench, entity_layout, item, item_kind,
+};
 use bevy::{
     app::{Plugin, Startup, Update},
     ecs::{
@@ -32,9 +34,9 @@ impl Plugin for CraftingPlugin {
             .register_type::<Option<Item>>()
             .register_type_data::<Option<Item>, ReflectDefault>()
             .register_type::<Item>()
-            .register_type::<Vec<ItemData>>()
-            .register_type_data::<Vec<ItemData>, ReflectDefault>()
-            .register_type::<ItemData>()
+            .register_type::<Vec<Item>>()
+            .register_type_data::<Vec<Item>, ReflectDefault>()
+            .register_type::<Item>()
             .register_type::<ItemKind>()
             .register_type::<ItemModifiers>()
             .register_type::<ItemProperties>()
@@ -114,7 +116,7 @@ pub fn enchant(
 
 #[derive(Event)]
 pub struct CraftMessage {
-    pub input_item: Item,
+    pub input_item: CraftLayout,
 }
 
 fn craft_on_classical(
@@ -128,17 +130,36 @@ fn craft_on_classical(
         let mut player_inventory = player_query.get_single_mut().unwrap();
         let workbench = workbench_query.get_single().unwrap();
 
-        if let Some(entity) =
-            player_inventory.take_linear_item(&input_items_query, &event.input_item)
-        {
-            if let Ok(item) = input_items_query.get(entity) {
-                if let Some(ent) = workbench.craft(&workbench_map, item) {
-                    player_inventory.add_single(ent)
-                } else {
-                    println!("fail3")
+        if let Some(layout) = player_inventory.take_layout(&input_items_query, &event.input_item) {
+            match layout {
+                EntityLayout::One(entity) => {
+                    if let Ok(item) = input_items_query.get(entity) {
+                        if let Some(ent) =
+                            workbench.craft(&workbench_map, &CraftLayout::One(item.clone()))
+                        {
+                            player_inventory.add(ent)
+                        } else {
+                            println!("fail3")
+                        }
+                    } else {
+                        println!("fail2")
+                    }
                 }
-            } else {
-                println!("fail2")
+                EntityLayout::Many(vec) => {
+                    for entity in vec {
+                        if let Ok(item) = input_items_query.get(entity) {
+                            if let Some(ent) =
+                                workbench.craft(&workbench_map, &CraftLayout::One(item.clone()))
+                            {
+                                player_inventory.add(ent)
+                            } else {
+                                println!("fail3")
+                            }
+                        } else {
+                            println!("fail2")
+                        }
+                    }
+                }
             }
         } else {
             println!("fail1")
@@ -167,23 +188,22 @@ impl Default for WindowContext {
 }
 
 fn show_item(item: &Item, ui: &mut Ui, enabled: bool) {
-    let mut show_single = |item_data: &ItemData| {
-        ui.add_enabled(enabled, |ui: &mut Ui| {
-            ui.label(item_data.name.to_owned())
-                .on_hover_text(format!("Kind: {:?}", item_data.kind))
-                .on_hover_text(format!("Modifiers: {:#?}", item_data.modifiers))
-        });
+    ui.add_enabled(enabled, |ui: &mut Ui| {
+        ui.label(item.name.to_owned())
+            .on_hover_text(format!("Kind: {:?}", item.kind))
+            .on_hover_text(format!("Modifiers: {:#?}", item.modifiers))
+    });
+}
+
+fn show_craft_layout(layout: &CraftLayout, ui: &mut Ui, enabled: bool) {
+    match layout {
+        CraftLayout::One(item) => {
+            show_item(item, ui, enabled);
+        }
+        CraftLayout::Many(vec) => vec.iter().for_each(|item| {
+            show_item(item, ui, enabled);
+        }),
     };
-    match item {
-        Item::Single(item_data) => {
-            show_single(item_data);
-        }
-        Item::Multiple(items_vec) => {
-            for item_data in items_vec {
-                show_single(item_data);
-            }
-        }
-    }
 }
 
 fn handle_enchantment_window(
@@ -207,15 +227,26 @@ fn handle_workbench_window(
             .resizable(true)
             .show(contexts.ctx_mut(), |ui| {
                 for (input, output) in crafts_map.map.iter() {
-                    let enabled = inventory.search_item(&input_items_query, input).is_some();
+                    let enabled = inventory
+                        .search_craft_layout(&input_items_query, input)
+                        .is_some();
 
                     ui.horizontal(|ui| {
-                        show_item(input, ui, enabled);
+                        show_craft_layout(input, ui, enabled);
 
                         ui.separator();
 
-                        if let Ok(item) = input_items_query.get(*output) {
-                            show_item(item, ui, enabled)
+                        match output {
+                            EntityLayout::One(entity) => {
+                                if let Ok(item) = input_items_query.get(*entity) {
+                                    show_item(item, ui, enabled)
+                                }
+                            }
+                            EntityLayout::Many(vec) => vec.into_iter().for_each(|entity| {
+                                if let Ok(item) = input_items_query.get(*entity) {
+                                    show_item(item, ui, enabled)
+                                }
+                            }),
                         }
 
                         if ui
@@ -289,12 +320,36 @@ impl Inventory {
         None
     }
 
-    // pub fn add(&mut self, item: Item) {
-    //     match item {
-    //         Item::Single(_) => self.add(item),
-    //         Item::Multiple(_) => self.add_vec(item.into()),
-    //     }
-    // }
+    pub fn take_layout(
+        &mut self,
+        query: &Query<&Item>,
+        layout: &CraftLayout,
+    ) -> Option<EntityLayout> {
+        match layout {
+            CraftLayout::One(item) => self.take_linear_item(query, item).map(EntityLayout::One),
+            CraftLayout::Many(items) => {
+                let mut ids = vec![];
+                for item in items {
+                    if let Some(id) = self.search_item(query, item) {
+                        ids.push(id)
+                    }
+                }
+                if !ids.len() > 0 {
+                    return None;
+                }
+
+                let mut layout_vec = vec![];
+
+                for id in ids {
+                    if let Some(entity) = self.take(id) {
+                        layout_vec.push(entity);
+                    }
+                }
+
+                Some(EntityLayout::Many(layout_vec))
+            }
+        }
+    }
 
     pub fn take(&mut self, id: usize) -> Option<Entity> {
         self.map.get_mut(id).and_then(|opt| opt.take())
@@ -312,6 +367,37 @@ impl Inventory {
             .position(|i| i == item)
     }
 
+    pub fn search_craft_layout(
+        &self,
+        query: &Query<&Item>,
+        layout: &CraftLayout,
+    ) -> Option<Vec<usize>> {
+        match layout {
+            CraftLayout::One(item) => {
+                return self.search_item(query, item).map(|id| vec![id]);
+            }
+            CraftLayout::Many(items) => {
+                let mut vec = vec![];
+                for item in items {
+                    if let Some(id) = self.search_item(query, item) {
+                        vec.push(id)
+                    }
+                }
+                if vec.len() > 0 {
+                    return Some(vec);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn add(&mut self, layout: EntityLayout) {
+        match layout {
+            EntityLayout::One(entity) => self.add_single(entity),
+            EntityLayout::Many(vec) => self.add_vec(vec),
+        }
+    }
+
     pub fn add_single(&mut self, item: Entity) {
         self.map.push(Some(item))
     }
@@ -322,43 +408,42 @@ impl Inventory {
     }
 }
 
-#[derive(Bundle)]
-pub struct ItemBundle {
-    pub item: Item,
-    pub enchantments: ItemEnchantments,
+#[derive(Hash, Clone, PartialEq, Eq, Debug)]
+pub enum CraftLayout {
+    One(Item),
+    Many(Vec<Item>),
 }
 
-#[derive(Debug, Component, Clone, Hash, PartialEq, Eq, Reflect)]
-#[reflect(Default)]
-pub enum Item {
-    Single(ItemData),
-    Multiple(Vec<ItemData>),
+#[derive(Clone)]
+enum EntityLayout {
+    One(Entity),
+    Many(Vec<Entity>),
 }
 
-impl From<Item> for Vec<Item> {
-    fn from(value: Item) -> Self {
+impl From<EntityLayout> for Vec<EntityLayout> {
+    fn from(value: EntityLayout) -> Self {
         match value {
-            Item::Single(data) => vec![Item::Single(data)],
-            Item::Multiple(data_vec) => data_vec.into_iter().map(Item::Single).collect(),
+            EntityLayout::One(data) => vec![EntityLayout::One(data)],
+            EntityLayout::Many(data_vec) => data_vec.into_iter().map(EntityLayout::One).collect(),
         }
     }
 }
 
-impl From<Vec<Item>> for Item {
-    fn from(value: Vec<Item>) -> Self {
+impl From<Vec<EntityLayout>> for EntityLayout {
+    fn from(value: Vec<EntityLayout>) -> Self {
         let mut vec = vec![];
         value.into_iter().for_each(|item| match item {
-            Item::Single(data) => vec.push(data),
-            Item::Multiple(mut data_vec) => vec.append(&mut data_vec),
+            EntityLayout::One(data) => vec.push(data),
+            EntityLayout::Many(mut data_vec) => vec.append(&mut data_vec),
         });
-        Item::Multiple(vec)
+        EntityLayout::Many(vec)
     }
 }
 
-impl Default for Item {
-    fn default() -> Self {
-        Self::Single(Default::default())
-    }
+#[derive(Bundle)]
+pub struct ItemBundle {
+    pub item: Item,
+    pub enchantments: ItemEnchantments,
 }
 
 #[derive(Component)]
@@ -394,15 +479,15 @@ impl ItemEnchantments {
     }
 }
 
-#[derive(Hash, Clone, PartialEq, Eq, Debug, Reflect)]
+#[derive(Component, Hash, Clone, PartialEq, Eq, Debug, Reflect)]
 #[reflect(Default)]
-pub struct ItemData {
+pub struct Item {
     pub name: String,
     pub kind: ItemKind,
     pub modifiers: ItemModifiers,
 }
 
-impl Default for ItemData {
+impl Default for Item {
     fn default() -> Self {
         Self {
             name: "TestItem".to_string(),
@@ -489,7 +574,7 @@ impl Enchantment for Power {
 
 pub trait WorkbenchTag {}
 
-pub type CraftsMap = HashMap<Item, Entity>;
+pub type CraftsMap = HashMap<CraftLayout, EntityLayout>;
 
 #[derive(Component)]
 pub struct Workbench<T: WorkbenchTag> {
@@ -516,22 +601,24 @@ create_workbench! {
 
 create_items_map! {
     ClassicalWorkbenchMap,
-    item! {
+    craft_layout![item! {
         "1",
         item_kind!(primitive),
         amount = 1,
         level = 1
-    } => item! {
-        "2",
-        item_kind!(complex {}),
-        amount = 1,
-        level = 1;
+    }] => item! {
+            "2",
+            item_kind!(primitive),
+            amount = 1,
+            level = 1
+        },
+        item! {
+            "1",
+            item_kind!(primitive),
+            amount = 1,
+            level = 1
+        }
 
-        "3",
-        item_kind!(complex {}),
-        amount = 1,
-        level = 1
-    }
 }
 
 mod macros {
@@ -577,8 +664,8 @@ mod macros {
                     }
 
                     impl Workbench<[<$name Workbench>]> {
-                        pub fn craft(&self, map: &[<$name WorkbenchMap>], item: &Item) -> Option<Entity> {
-                            map.map.get(item).copied()
+                        pub fn craft(&self, map: &[<$name WorkbenchMap>], item: &CraftLayout) -> Option<EntityLayout> {
+                            map.map.get(item).cloned()
                         }
                     }
                 )*
@@ -615,36 +702,59 @@ mod macros {
             amount = $amount:literal,
             level = $level:literal
         ) => {
-            Item::Single(ItemData {
+            Item {
                 name: $name.to_string(),
                 kind: $kind,
                 modifiers: ItemModifiers {
                     amount: $amount,
                     level: $level,
                 },
-            })
-        };
-        (
-            $(
-                $name:literal,
-                $kind:expr,
-                amount = $amount:literal,
-                level = $level:literal
-            );+
-        ) => {
-            Item::Multiple(vec![
-                $(ItemData {
-                    name: $name.to_string(),
-                    kind: $kind,
-                    modifiers: ItemModifiers {
-                        amount: $amount,
-                        level: $level,
-                    },
-                },)+
-            ])
+            }
         };
     }
     pub(crate) use item;
+
+    macro_rules! craft_layout {
+        (
+            $item:expr
+        ) => {
+            CraftLayout::One($item)
+        };
+        (
+            $($item:expr),*
+        ) => {
+            CraftLayout::Many(vec![$($item,)*])
+        };
+    }
+    pub(crate) use craft_layout;
+
+    /// Easily create [`EntityLayout`]
+    ///
+    /// [`EntityLayout::One`]
+    /// ```
+    /// entity_layout![commands.spawn_empty().id()]
+    /// ```
+    ///
+    /// [`EntityLayout::Many`]
+    /// ```
+    /// entity_layout![
+    ///     commands.spawn_empty().id(),
+    ///     commands.spawn_empty().id()
+    /// ]
+    /// ```
+    macro_rules! entity_layout {
+        (
+            $item:expr
+        ) => {
+            EntityLayout::One($item)
+        };
+        (
+            $($item:expr),* $(,)?
+        ) => {
+            EntityLayout::Many(vec![$($item,)*])
+        };
+    }
+    pub(crate) use entity_layout;
 
     /// Create an `ItemsMap`.
     /// This macro just implements `Default` for given `WorkbenchMap`.
@@ -653,19 +763,14 @@ mod macros {
     macro_rules! create_items_map {
         (
             $name:ty,
-            $($in_item:expr => $out_item:expr)*
+            $($in_item:expr => $($out_item:expr),*);*
         ) => {
-            paste! {
-                #[derive(Component)]
-                struct [< $name TagComponent >];
-
-                impl $name {
-                    fn new(commands: &mut Commands) -> Self {
-                        Self {
-                            map: HashMap::from([
-                                $(($in_item, commands.spawn($out_item).insert([< $name TagComponent >]).id()))*
-                            ]),
-                        }
+            impl $name {
+                fn new(commands: &mut Commands) -> Self {
+                    Self {
+                        map: HashMap::from([
+                            $( ($in_item, entity_layout![$( commands.spawn($out_item).id(), )*]),)*
+                        ]),
                     }
                 }
             }
@@ -680,35 +785,6 @@ mod tests {
 
     #[test]
     fn item_convert_test() {
-        let single_vec: Vec<Item> = item! {
-            "2",
-            item_kind!(complex {}),
-            amount = 1,
-            level = 1;
-
-            "3",
-            item_kind!(complex {}),
-            amount = 1,
-            level = 1
-        }
-        .into();
-        dbg!(single_vec);
-
-        let multiple: Item = vec![
-            item! {
-                "2",
-                item_kind!(complex {}),
-                amount = 1,
-                level = 1
-            },
-            item! {
-                "3",
-                item_kind!(complex {}),
-                amount = 1,
-                level = 1
-            },
-        ]
-        .into();
-        dbg!(multiple);
+        let c = vec![1];
     }
 }
