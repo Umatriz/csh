@@ -8,7 +8,7 @@ use bevy::{
         component::Component,
         entity::Entity,
         event::{Event, EventReader, EventWriter},
-        query::With,
+        query::{self, With},
         reflect::AppTypeRegistry,
         system::{Commands, Query, Res, ResMut, Resource},
     },
@@ -92,6 +92,13 @@ fn add_item_window(
                     println!("err")
                 }
             }
+            if ui.button("Clear Inventory").clicked() {
+                if let Ok(mut inventory) = player_query.get_single_mut() {
+                    inventory.map = vec![]
+                } else {
+                    println!("err")
+                }
+            }
         });
     }
 }
@@ -131,36 +138,18 @@ fn craft_on_classical(
         let workbench = workbench_query.get_single().unwrap();
 
         if let Some(layout) = player_inventory.take_layout(&input_items_query, &event.input_item) {
-            match layout {
-                EntityLayout::One(entity) => {
-                    if let Ok(item) = input_items_query.get(entity) {
-                        if let Some(ent) =
-                            workbench.craft(&workbench_map, &CraftLayout::One(item.clone()))
-                        {
-                            player_inventory.add(ent)
-                        } else {
-                            println!("fail3")
-                        }
-                    } else {
-                        println!("fail2")
-                    }
+            if let Some(craft_layout) = layout.into_craft_layout(&input_items_query) {
+                if let Some(layout) = workbench.craft(&workbench_map, &craft_layout) {
+                    player_inventory.add(layout)
+                } else {
+                    println!("fail3")
                 }
-                EntityLayout::Many(vec) => {
-                    for entity in vec {
-                        if let Ok(item) = input_items_query.get(entity) {
-                            if let Some(ent) =
-                                workbench.craft(&workbench_map, &CraftLayout::One(item.clone()))
-                            {
-                                player_inventory.add(ent)
-                            } else {
-                                println!("fail3")
-                            }
-                        } else {
-                            println!("fail2")
-                        }
-                    }
-                }
+            } else {
+                println!("fail2")
             }
+            // if let Some(layout) = workbench.craft(&workbench_map, &event.input_item) {
+            //     player_inventory.add(layout)
+            // }
         } else {
             println!("fail1")
         }
@@ -242,7 +231,7 @@ fn handle_workbench_window(
                                     show_item(item, ui, enabled)
                                 }
                             }
-                            EntityLayout::Many(vec) => vec.into_iter().for_each(|entity| {
+                            EntityLayout::Many(vec) => vec.iter().for_each(|entity| {
                                 if let Ok(item) = input_items_query.get(*entity) {
                                     show_item(item, ui, enabled)
                                 }
@@ -326,7 +315,10 @@ impl Inventory {
         layout: &CraftLayout,
     ) -> Option<EntityLayout> {
         match layout {
-            CraftLayout::One(item) => self.take_linear_item(query, item).map(EntityLayout::One),
+            CraftLayout::One(item) => {
+                println!("one");
+                self.take_linear_item(query, item).map(EntityLayout::One)
+            }
             CraftLayout::Many(items) => {
                 let mut ids = vec![];
                 for item in items {
@@ -334,19 +326,21 @@ impl Inventory {
                         ids.push(id)
                     }
                 }
-                if !ids.len() > 0 {
-                    return None;
-                }
+                if !ids.is_empty() {
+                    let mut layout_vec = vec![];
 
-                let mut layout_vec = vec![];
+                    for id in ids {
+                        let ent = self.take(id);
 
-                for id in ids {
-                    if let Some(entity) = self.take(id) {
-                        layout_vec.push(entity);
+                        if let Some(entity) = ent {
+                            layout_vec.push(entity);
+                        }
                     }
-                }
 
-                Some(EntityLayout::Many(layout_vec))
+                    Some(EntityLayout::Many(layout_vec))
+                } else {
+                    None
+                }
             }
         }
     }
@@ -360,11 +354,18 @@ impl Inventory {
     }
 
     pub fn search_item(&self, query: &Query<&Item>, item: &Item) -> Option<usize> {
-        self.map
+        for (id, it) in self
+            .map
             .iter()
-            .filter_map(|i| *i)
-            .filter_map(|entity| query.get(entity).ok())
-            .position(|i| i == item)
+            .enumerate()
+            .filter_map(|(id, opt)| (*opt).map(|i| (id, i)))
+            .filter_map(|(id, entity)| query.get(entity).ok().map(|item| (id, item)))
+        {
+            if it == item {
+                return Some(id);
+            }
+        }
+        None
     }
 
     pub fn search_craft_layout(
@@ -383,7 +384,7 @@ impl Inventory {
                         vec.push(id)
                     }
                 }
-                if vec.len() > 0 {
+                if items.len() == vec.len() {
                     return Some(vec);
                 }
             }
@@ -415,9 +416,27 @@ pub enum CraftLayout {
 }
 
 #[derive(Clone)]
-enum EntityLayout {
+pub enum EntityLayout {
     One(Entity),
     Many(Vec<Entity>),
+}
+
+impl EntityLayout {
+    pub fn into_craft_layout(self, query: &Query<&Item>) -> Option<CraftLayout> {
+        match self {
+            EntityLayout::One(entity) => query.get(entity).ok().cloned().map(CraftLayout::One),
+            EntityLayout::Many(entities) => Some(CraftLayout::Many({
+                let mut vec = entities
+                    .into_iter()
+                    .filter_map(|entity| query.get(entity).ok())
+                    .cloned()
+                    .collect::<Vec<_>>();
+
+                vec.sort();
+                vec
+            })),
+        }
+    }
 }
 
 impl From<EntityLayout> for Vec<EntityLayout> {
@@ -479,7 +498,7 @@ impl ItemEnchantments {
     }
 }
 
-#[derive(Component, Hash, Clone, PartialEq, Eq, Debug, Reflect)]
+#[derive(Component, Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Reflect)]
 #[reflect(Default)]
 pub struct Item {
     pub name: String,
@@ -497,7 +516,7 @@ impl Default for Item {
     }
 }
 
-#[derive(Default, Clone, Hash, PartialEq, Eq, Debug, Reflect)]
+#[derive(Default, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Debug, Reflect)]
 #[reflect(Default)]
 pub enum ItemKind {
     Complex(ItemProperties),
@@ -505,7 +524,7 @@ pub enum ItemKind {
     Primitive,
 }
 
-#[derive(Hash, Clone, PartialEq, Eq, Debug, Reflect)]
+#[derive(Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Reflect)]
 #[reflect(Default)]
 pub struct ItemProperties {}
 
@@ -515,7 +534,7 @@ impl Default for ItemProperties {
     }
 }
 
-#[derive(Hash, Clone, PartialEq, Eq, Debug, Reflect)]
+#[derive(Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Reflect)]
 #[reflect(Default)]
 pub struct ItemModifiers {
     pub amount: u8,
@@ -617,8 +636,36 @@ create_items_map! {
             item_kind!(primitive),
             amount = 1,
             level = 1
+        };
+        craft_layout![item! {
+            "1",
+            item_kind!(primitive),
+            amount = 1,
+            level = 1
+        },item! {
+            "2",
+            item_kind!(primitive),
+            amount = 1,
+            level = 1
         }
 
+        ] => item! {
+                "3",
+                item_kind!(primitive),
+                amount = 1,
+                level = 1
+            }, item! {
+                "1",
+                item_kind!(primitive),
+                amount = 1,
+                level = 1
+            },
+            item! {
+                "2",
+                item_kind!(primitive),
+                amount = 1,
+                level = 1
+            }
 }
 
 mod macros {
@@ -723,7 +770,11 @@ mod macros {
         (
             $($item:expr),*
         ) => {
-            CraftLayout::Many(vec![$($item,)*])
+            CraftLayout::Many({
+                let mut vec = vec![$($item,)*];
+                vec.sort();
+                vec
+            })
         };
     }
     pub(crate) use craft_layout;
