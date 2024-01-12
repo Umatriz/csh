@@ -14,7 +14,7 @@ use bevy::{
     transform::components::Transform,
 };
 
-use super::crafting::Inventory;
+use super::crafting::logic::Inventory;
 
 pub struct PlayerPlugin;
 

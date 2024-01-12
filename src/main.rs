@@ -4,7 +4,7 @@ use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use plugins::{camera::CameraPlugin, crafting::CraftingPlugin, player::PlayerPlugin};
 
-pub mod logic;
+pub mod lazy_eq;
 pub mod plugins;
 pub mod utils;
 
