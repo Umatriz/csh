@@ -3,12 +3,11 @@ use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use plugins::{
-    camera::CameraPlugin,
-    crafting::CraftingPlugin,
-    player::{Player, PlayerPlugin},
+    camera::CameraPlugin, chest::ChestPlugin, crafting::CraftingPlugin, player::PlayerPlugin,
 };
 
 pub mod lazy_eq;
+pub mod logic;
 pub mod plugins;
 pub mod utils;
 
@@ -18,7 +17,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins((EguiPlugin, WorldInspectorPlugin::new()))
-        .add_plugins((PlayerPlugin, CameraPlugin, CraftingPlugin))
+        .add_plugins((PlayerPlugin, CameraPlugin, CraftingPlugin, ChestPlugin))
         .add_state::<GameState>()
         .add_loading_state(
             LoadingState::new(GameState::Loading).continue_to_state(GameState::Next), // .load_collection::<CursorFolderCollection>(),

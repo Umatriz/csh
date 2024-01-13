@@ -191,7 +191,7 @@ impl Default for WindowContext {
     }
 }
 
-fn show_item(item_bundle: (&Item, &ItemStack), ui: &mut Ui, enabled: bool) {
+pub fn show_item(item_bundle: (&Item, &ItemStack), ui: &mut Ui, enabled: bool) {
     ui.add_enabled(enabled, |ui: &mut Ui| {
         ui.horizontal(|ui| {
             ui.label(item_bundle.0.name.to_owned())

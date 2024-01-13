@@ -17,6 +17,8 @@ pub mod logic;
 mod macros;
 mod systems;
 
+pub use systems::show_item;
+
 pub struct CraftingPlugin;
 
 impl Plugin for CraftingPlugin {

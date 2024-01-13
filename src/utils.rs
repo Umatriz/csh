@@ -1,4 +1,7 @@
-use bevy::{math::Vec2, render::color::Color};
+use bevy::{
+    math::{Vec2, Vec3},
+    render::color::Color,
+};
 
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     (1.0 - t) * a + b * t
@@ -35,4 +38,14 @@ pub fn color_lerp_linear(color0: Color, color1: Color, t: f32) -> Color {
     let b1 = l1.b();
 
     Color::rgb_linear(r0 + t * (r1 - r0), g0 + t * (g1 - g0), b0 + t * (b1 - b0))
+}
+
+pub fn squared_distance(point1: Vec3, point2: Vec3) -> f32 {
+    (point2.x - point1.x).powi(2) + (point2.y - point1.y).powi(2) + (point2.z - point1.z).powi(2)
+}
+
+#[test]
+fn feature() {
+    let d = squared_distance(Vec3::ZERO, dbg!(Vec3::ONE * 3.0));
+    dbg!(d);
 }

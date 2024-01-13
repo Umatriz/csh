@@ -9,6 +9,7 @@ use bevy::{
     },
     input::{keyboard::KeyCode, Input},
     math::Vec2,
+    reflect::{std_traits::ReflectDefault, Reflect},
     sprite::{Sprite, SpriteBundle},
     time::Time,
     transform::components::Transform,
@@ -25,7 +26,8 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Reflect, Debug)]
+#[reflect(Default)]
 pub struct Player;
 
 #[derive(Bundle, Default)]

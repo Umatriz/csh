@@ -52,10 +52,12 @@ macro_rules! create_workbench {
 #[macro_export]
 macro_rules! item_kind {
     (primitive) => {
-        $crate::plugins::crafting::ItemKind::Primitive
+        $crate::plugins::crafting::logic::ItemKind::Primitive
     };
     (complex {}) => {
-        $crate::plugins::crafting::ItemKind::Complex($crate::plugins::crafting::ItemProperties {})
+        $crate::plugins::crafting::logic::ItemKind::Complex(
+            $crate::plugins::crafting::logic::ItemProperties {},
+        )
     };
 }
 
@@ -83,23 +85,26 @@ macro_rules! item {
         amount = $amount:literal,
         level = $level:literal
     ) => {
-        $crate::plugins::crafting::ItemBundle {
-            item: $crate::plugins::crafting::Item {
+        $crate::plugins::crafting::logic::ItemBundle {
+            item: $crate::plugins::crafting::logic::Item {
                 name: $name.to_string(),
                 kind: $kind,
                 level: $level,
             },
-            stack: $crate::plugins::crafting::ItemStack($amount),
+            stack: $crate::plugins::crafting::logic::ItemStack($amount),
         }
     };
 }
 
 #[macro_export]
+/// ```
+/// layout![item! { "ExampleItem", item_kind!(primitive), amount = 1, level = 1 }]
+/// ```
 macro_rules! layout {
     (
         $($item:expr),* $(,)?
     ) => {
-        $crate::plugins::crafting::Layout(vec![$($item,)*])
+        $crate::plugins::crafting::logic::Layout(vec![$($item,)*])
     };
 }
 

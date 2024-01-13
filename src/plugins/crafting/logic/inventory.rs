@@ -24,6 +24,10 @@ impl Inventory {
         Self { map: Vec::new() }
     }
 
+    pub fn join(&mut self, other: &mut Self) {
+        self.map.append(&mut other.map)
+    }
+
     pub fn take_linear(&mut self, entity: Entity) -> Option<Entity> {
         for item_ref in self.map.iter_mut().filter(|opt| opt.is_some()) {
             if item_ref == &mut Some(entity) {
