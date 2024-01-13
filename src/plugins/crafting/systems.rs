@@ -134,7 +134,7 @@ fn craft<W: WorkbenchTag>(
     mut items_query: Query<(&mut Item, &mut ItemStack)>,
 ) {
     for event in event_message.read() {
-        let CraftMessage { input, output, .. } = event;
+        let CraftMessage { input,  .. } = event;
         let mut player_inventory = player_query.get_single_mut().unwrap();
         let workbench = workbench_query.get_single().unwrap();
 
@@ -202,9 +202,9 @@ fn show_craft_layout(layout: &ItemsLayout, ui: &mut Ui, enabled: bool) {
 }
 
 fn handle_enchantment_window(
-    mut contexts: EguiContexts,
-    window_context: Res<WindowContext>,
-    player_query: Query<&Inventory, With<Player>>,
+    _contexts: EguiContexts,
+    _window_context: Res<WindowContext>,
+    _player_query: Query<&Inventory, With<Player>>,
 ) {
 }
 

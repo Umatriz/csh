@@ -1,32 +1,24 @@
 use bevy::{
-    app::{Plugin, Startup, Update},
+    app::{Plugin, Startup},
     ecs::{
         component::Component,
         entity::Entity,
-        event::{Event, EventReader, EventWriter},
-        query::With,
-        reflect::AppTypeRegistry,
-        system::{Commands, Query, Res, ResMut, Resource},
+        system::{Commands},
     },
-    log::error,
     reflect::{std_traits::ReflectDefault, Reflect},
 };
-use bevy_inspector_egui::{
-    bevy_egui::EguiContexts,
-    egui::{self, Ui},
-    quick::ResourceInspectorPlugin,
-};
-use std::{marker::PhantomData, sync::Arc};
+
+use std::{sync::Arc};
 
 use self::{
     logic::{
-        ClassicalWorkbench, ClassicalWorkbenchMap, Craft, Inventory, Item, ItemBundle, ItemKind,
-        ItemProperties, ItemStack, ItemsLayout, Layout, Workbench, WorkbenchTag,
+        ClassicalWorkbenchMap, Inventory, Item, ItemBundle, ItemKind,
+        ItemProperties, ItemStack, Layout,
     },
     systems::WindowSystemsPlugin,
 };
 
-use super::player::{Player, PlayerProperties};
+use super::player::{PlayerProperties};
 
 pub mod logic;
 mod macros;
