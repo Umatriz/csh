@@ -32,11 +32,11 @@ macro_rules! create_workbench {
         paste::paste! {
             $(
                 pub enum [<$name Workbench>] {}
-                impl WorkbenchTag for [<$name Workbench>] {}
+                impl $crate::plugins::crafting::logic::WorkbenchTag for [<$name Workbench>] {}
 
-                #[derive(Resource)]
+                #[derive(bevy::prelude::Resource)]
                 pub struct [<$name WorkbenchMap>] {
-                    pub map: CraftsMap,
+                    pub map: $crate::plugins::crafting::logic::CraftsMap,
                 }
             )*
         }
@@ -50,12 +50,13 @@ pub(crate) use create_workbench;
 /// item_kind!(primitive) // ItemKind::Primitive
 /// item_kind!(complex {}) // ItemKind::Complex(ItemProperties {})
 /// ```
+#[macro_export]
 macro_rules! item_kind {
     (primitive) => {
-        ItemKind::Primitive
+        $crate::plugins::crafting::ItemKind::Primitive
     };
     (complex {}) => {
-        ItemKind::Complex(ItemProperties {})
+        $crate::plugins::crafting::ItemKind::Complex($crate::plugins::crafting::ItemProperties {})
     };
 }
 pub(crate) use item_kind;
@@ -65,6 +66,7 @@ pub(crate) use item_kind;
 /// ```rust
 /// item! { "ExampleItem", item_kind!(primitive), amount = 1, level = 1 }
 /// ```
+#[macro_export]
 macro_rules! item {
     (
         $name:literal,
@@ -83,23 +85,24 @@ macro_rules! item {
         amount = $amount:literal,
         level = $level:literal
     ) => {
-        ItemBundle {
-            item: Item {
+        $crate::plugins::crafting::ItemBundle {
+            item: $crate::plugins::crafting::Item {
                 name: $name.to_string(),
                 kind: $kind,
                 level: $level,
             },
-            stack: ItemStack($amount),
+            stack: $crate::plugins::crafting::ItemStack($amount),
         }
     };
 }
 pub(crate) use item;
 
+#[macro_export]
 macro_rules! layout {
     (
         $($item:expr),* $(,)?
     ) => {
-        Layout(vec![$($item,)*])
+        $crate::plugins::crafting::Layout(vec![$($item,)*])
     };
 }
 pub(crate) use layout;
@@ -113,10 +116,10 @@ macro_rules! create_items_map {
         $name:ty,
         $($($in_item:expr),* => $($out_item:expr),*);*
     ) => {
-        impl $name {
-            fn new() -> Self {
+        impl Default for $name {
+            fn default() -> Self {
                 Self {
-                    map: HashMap::from([
+                    map: bevy::utils::hashbrown::HashMap::from([
                         $( (layout![$($in_item,)*], layout![$( $out_item, )*]),)*
                     ]),
                 }
@@ -125,3 +128,41 @@ macro_rules! create_items_map {
     };
 }
 pub(crate) use create_items_map;
+
+/// It can be used to create a new Workbench
+/// ```
+/// workbench! {
+///     Classical,
+///     item! { "1", item_kind!(primitive), amount = 1, level = 1 }
+///     =>
+///     item! { "2", item_kind!(primitive), amount = 1, level = 1 },
+/// }
+/// ```
+#[macro_export(local_inner_macros)]
+macro_rules! workbench {
+    (
+        $name:ident,
+        $($($in_item:expr),* => $($out_item:expr),*);*
+    ) => {
+        paste::paste! {
+            pub enum [<$name Workbench>] {}
+            impl $crate::plugins::crafting::logic::WorkbenchTag for [<$name Workbench>] {}
+
+            #[derive(bevy::prelude::Resource)]
+            pub struct [<$name WorkbenchMap>] {
+                pub map: $crate::plugins::crafting::logic::CraftsMap,
+            }
+
+            impl Default for [<$name WorkbenchMap>] {
+                fn default() -> Self {
+                    Self {
+                        map: bevy::utils::hashbrown::HashMap::from([
+                            $( (layout![$($in_item,)*], layout![$( $out_item, )*]),)*
+                        ]),
+                    }
+                }
+            }
+        }
+    };
+}
+pub(crate) use workbench;

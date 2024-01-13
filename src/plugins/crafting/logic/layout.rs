@@ -19,7 +19,7 @@ impl<T> Layout<T> {
 
     pub fn get_one(&self) -> Option<&T> {
         match self.is_one() {
-            true => self.0.iter().next(),
+            true => self.0.first(),
             false => None,
         }
     }

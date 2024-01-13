@@ -59,68 +59,13 @@ impl Inventory {
         self.search_satisfying(query, layout).map(|ids| {
             ids.into_iter()
                 .filter_map(|id| self.take(id))
-                // .filter_map(|i| {
-                //     query.get(i).ok().map(|(item, stack)| ItemBundle {
-                //         item: item.clone(),
-                //         stack: stack.clone(),
-                //     })
-                // })
                 .collect::<Vec<_>>()
         })
-        // .map(Layout)
     }
 
     pub fn take(&mut self, id: usize) -> Option<Entity> {
         self.map.get_mut(id).and_then(|opt| opt.take())
     }
-
-    // pub fn search(&self, entity: Entity) -> Option<usize> {
-    //     for (id, ent) in self
-    //         .map
-    //         .iter()
-    //         .enumerate()
-    //         .filter_map(|(id, ent)| (*ent).map(|e| (id, e)))
-    //     {
-    //         if ent == entity {
-    //             return Some(id);
-    //         }
-    //     }
-    //     None
-    // }
-
-    // fn search_item(&self, query: &Query<&Item>, item: &Item) -> Option<usize> {
-    //     for (id, it) in self
-    //         .map
-    //         .iter()
-    //         .enumerate()
-    //         .filter_map(|(id, opt)| (*opt).map(|i| (id, i)))
-    //         .filter_map(|(id, entity)| query.get(entity).ok().map(|item| (id, item)))
-    //     {
-    //         if it == item {
-    //             return Some(id);
-    //         }
-    //     }
-    //     None
-    // }
-
-    // fn search_craft_layout(
-    //     &self,
-    //     query: &Query<&Item>,
-    //     layout: &ItemsLayout,
-    // ) -> Option<Vec<usize>> {
-    //     let items = layout.get();
-    //     let mut vec = vec![];
-    //     for ItemBundle { item, stack } in items {
-    //         if let Some(id) = self.search_item(query, item) {
-    //             vec.push(id)
-    //         }
-    //     }
-    //     if items.len() == vec.len() {
-    //         return Some(vec);
-    //     }
-
-    //     None
-    // }
 
     pub fn search_satisfying(
         &self,
@@ -171,7 +116,7 @@ impl Inventory {
 
         for item_bundle in items {
             if let Some((id, item_entity)) = self
-                .search_condition(&query.to_readonly(), |it, _, ent| {
+                .search_condition(&query.to_readonly(), |it, _, _| {
                     it.name == item_bundle.item.name && it.kind == item_bundle.item.kind
                 })
                 .and_then(|id| self.take(id).map(|ent| (id, ent)))
