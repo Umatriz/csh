@@ -36,6 +36,11 @@ pub trait Craft {
     }
 }
 
+pub trait WorkbenchMap {
+    fn name(&self) -> &'static str;
+    fn map(&self) -> &CraftsMap;
+}
+
 impl<T: WorkbenchTag> Craft for Workbench<T> {}
 
 workbench! {
@@ -60,4 +65,18 @@ workbench! {
     item! { "3", item_kind!(primitive), amount = 2, level = 1 }
     =>
     item! { "4", item_kind!(primitive), amount = 5, level = 1 }
+}
+
+workbench! {
+    Second,
+
+    item! { "4", item_kind!(primitive), amount = 1, level = 1 }
+    =>
+    item! { "Cool Item", item_kind!(primitive), amount = 1, level = 1 }
+}
+
+#[test]
+fn feature() {
+    let map = ClassicalWorkbenchMap::default();
+    dbg!("{}", map.name());
 }

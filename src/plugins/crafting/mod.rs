@@ -1,24 +1,17 @@
 use bevy::{
-    app::{Plugin, Startup},
-    ecs::{
-        component::Component,
-        entity::Entity,
-        system::{Commands},
-    },
+    app::Plugin,
+    ecs::{component::Component, entity::Entity, system::Commands},
     reflect::{std_traits::ReflectDefault, Reflect},
 };
 
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use self::{
-    logic::{
-        ClassicalWorkbenchMap, Inventory, Item, ItemBundle, ItemKind,
-        ItemProperties, ItemStack, Layout,
-    },
+    logic::{Inventory, Item, ItemBundle, ItemKind, ItemProperties, ItemStack, Layout},
     systems::WindowSystemsPlugin,
 };
 
-use super::player::{PlayerProperties};
+use super::player::PlayerProperties;
 
 pub mod logic;
 mod macros;
@@ -38,14 +31,8 @@ impl Plugin for CraftingPlugin {
             .register_type::<ItemKind>()
             .register_type::<ItemStack>()
             .register_type::<ItemProperties>()
-            .add_systems(Startup, add_resources)
             .add_plugins(WindowSystemsPlugin);
     }
-}
-
-fn add_resources(mut commands: Commands) {
-    let map = ClassicalWorkbenchMap::default();
-    commands.insert_resource(map);
 }
 
 #[derive(Component)]

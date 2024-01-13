@@ -2,11 +2,17 @@ use bevy::prelude::*;
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use plugins::{camera::CameraPlugin, crafting::CraftingPlugin, player::PlayerPlugin};
+use plugins::{
+    camera::CameraPlugin,
+    crafting::CraftingPlugin,
+    player::{Player, PlayerPlugin},
+};
 
 pub mod lazy_eq;
 pub mod plugins;
 pub mod utils;
+
+pub use core::stringify;
 
 fn main() {
     App::new()

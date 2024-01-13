@@ -20,7 +20,8 @@ use crate::plugins::player::Player;
 
 use super::logic::{
     ClassicalWorkbench, ClassicalWorkbenchMap, Craft, Inventory, Item, ItemBundle, ItemStack,
-    ItemsLayout, Layout, Workbench, WorkbenchTag,
+    ItemsLayout, Layout, SecondWorkbench, SecondWorkbenchMap, Workbench, WorkbenchMap,
+    WorkbenchTag,
 };
 
 pub struct WindowSystemsPlugin;
@@ -31,19 +32,35 @@ impl Plugin for WindowSystemsPlugin {
             .init_resource::<WindowContext>()
             .init_resource::<AddItemWindow>()
             .add_event::<CraftMessage<ClassicalWorkbench>>()
+            .add_event::<CraftMessage<SecondWorkbench>>()
             .add_plugins(ResourceInspectorPlugin::<WindowContext>::default())
             .add_systems(Startup, spawn_test_workbench)
-            .add_systems(Update, craft::<ClassicalWorkbench>)
-            .add_systems(Update, add_item_window)
             .add_systems(
                 Update,
                 (
-                    handle_workbench_window::<ClassicalWorkbench>,
+                    craft::<ClassicalWorkbench, ClassicalWorkbenchMap>,
+                    craft::<SecondWorkbench, SecondWorkbenchMap>,
+                ),
+            )
+            .add_systems(Update, add_item_window)
+            .init_resource::<SecondWorkbenchMap>()
+            .init_resource::<ClassicalWorkbenchMap>()
+            .add_systems(
+                Update,
+                (
+                    handle_workbench_window::<ClassicalWorkbench, ClassicalWorkbenchMap>,
+                    handle_workbench_window::<SecondWorkbench, SecondWorkbenchMap>,
                     handle_inventory_window,
                     handle_enchantment_window,
                 ),
             );
     }
+}
+
+fn spawn_test_workbench(mut commands: Commands) {
+    commands.spawn(Workbench::<ClassicalWorkbench>::new());
+    commands.spawn(Workbench::<SecondWorkbench>::new());
+    // commands.spawn(EnchantingTable);
 }
 
 #[derive(Resource, Default)]
@@ -100,11 +117,6 @@ fn add_item_window(
     }
 }
 
-fn spawn_test_workbench(mut commands: Commands) {
-    commands.spawn(Workbench::<ClassicalWorkbench>::new());
-    // commands.spawn(EnchantingTable);
-}
-
 // pub fn enchant(
 //     commands: &mut Commands,
 //     enchantment_table: &EnchantingTable,
@@ -125,16 +137,16 @@ pub struct CraftMessage<W: WorkbenchTag> {
     _marker: PhantomData<W>,
 }
 
-fn craft<W: WorkbenchTag>(
+fn craft<W: WorkbenchTag, M: WorkbenchMap + Resource>(
     mut commands: Commands,
     mut event_message: EventReader<CraftMessage<W>>,
     mut player_query: Query<&mut Inventory, With<Player>>,
     workbench_query: Query<&Workbench<W>>,
-    workbench_map: Res<ClassicalWorkbenchMap>,
+    workbench_map: Res<M>,
     mut items_query: Query<(&mut Item, &mut ItemStack)>,
 ) {
     for event in event_message.read() {
-        let CraftMessage { input,  .. } = event;
+        let CraftMessage { input, .. } = event;
         let mut player_inventory = player_query.get_single_mut().unwrap();
         let workbench = workbench_query.get_single().unwrap();
 
@@ -148,7 +160,7 @@ fn craft<W: WorkbenchTag>(
                 }
             }
 
-            if let Some(layout) = workbench.craft(&workbench_map.map, input) {
+            if let Some(layout) = workbench.craft(workbench_map.map(), input) {
                 player_inventory.add_combine(&mut commands, &mut items_query, &layout);
             } else {
                 error!("Crafting failed on stage: 2")
@@ -208,20 +220,20 @@ fn handle_enchantment_window(
 ) {
 }
 
-fn handle_workbench_window<W: WorkbenchTag>(
+fn handle_workbench_window<W: WorkbenchTag, M: WorkbenchMap + Resource>(
     mut contexts: EguiContexts,
     workbench_window_state: Res<WindowContext>,
     mut craft_event_message: EventWriter<CraftMessage<W>>,
-    crafts_map: Res<ClassicalWorkbenchMap>,
+    crafts_map: Res<M>,
     player_query: Query<&Inventory, With<Player>>,
     items_query: Query<(&Item, &ItemStack)>,
 ) {
     if workbench_window_state.workbench_window {
         let inventory = player_query.get_single().unwrap();
-        egui::Window::new("Workbench")
+        egui::Window::new(crafts_map.name())
             .resizable(true)
             .show(contexts.ctx_mut(), |ui| {
-                for (input, output) in crafts_map.map.iter() {
+                for (input, output) in crafts_map.map().iter() {
                     let enabled = inventory.search_satisfying(&items_query, input).is_some();
 
                     ui.horizontal(|ui| {

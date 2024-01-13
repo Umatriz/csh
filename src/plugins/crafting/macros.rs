@@ -43,7 +43,6 @@ macro_rules! create_workbench {
     };
 }
 
-
 /// Select the `ItemKind` uses in `item! macro
 /// Example:
 /// ```rust
@@ -59,7 +58,6 @@ macro_rules! item_kind {
         $crate::plugins::crafting::ItemKind::Complex($crate::plugins::crafting::ItemProperties {})
     };
 }
-
 
 /// Create an `ItemBundle`
 /// Example:
@@ -96,7 +94,6 @@ macro_rules! item {
     };
 }
 
-
 #[macro_export]
 macro_rules! layout {
     (
@@ -105,7 +102,6 @@ macro_rules! layout {
         $crate::plugins::crafting::Layout(vec![$($item,)*])
     };
 }
-
 
 /// Create an `ItemsMap`.
 /// This macro just implements `Default` for given `WorkbenchMap`.
@@ -128,7 +124,6 @@ macro_rules! create_items_map {
     };
 }
 
-
 /// It can be used to create a new Workbench
 /// ```
 /// workbench! {
@@ -148,6 +143,16 @@ macro_rules! workbench {
             pub enum [<$name Workbench>] {}
             impl $crate::plugins::crafting::logic::WorkbenchTag for [<$name Workbench>] {}
 
+            impl $crate::plugins::crafting::logic::WorkbenchMap for [<$name WorkbenchMap>] {
+                fn name(&self) -> &'static str {
+                    stringify!([<$name Workbench>])
+                }
+
+                fn map(&self) -> &CraftsMap {
+                    &self.map
+                }
+            }
+
             #[derive(bevy::prelude::Resource)]
             pub struct [<$name WorkbenchMap>] {
                 pub map: $crate::plugins::crafting::logic::CraftsMap,
@@ -165,4 +170,3 @@ macro_rules! workbench {
         }
     };
 }
-
