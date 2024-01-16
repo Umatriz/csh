@@ -171,24 +171,13 @@ fn craft<W: WorkbenchTag, M: WorkbenchMap + Resource>(
     }
 }
 
-#[derive(Resource, Reflect)]
+#[derive(Resource, Default, Reflect)]
 #[reflect(Default)]
 pub struct WindowContext {
     workbench_window: bool,
     inventory_window: bool,
     enchantment_window: bool,
     add_item_window: bool,
-}
-
-impl Default for WindowContext {
-    fn default() -> Self {
-        Self {
-            workbench_window: true,
-            inventory_window: true,
-            enchantment_window: true,
-            add_item_window: true,
-        }
-    }
 }
 
 pub fn show_item(item_bundle: (&Item, &ItemStack), ui: &mut Ui, enabled: bool) {

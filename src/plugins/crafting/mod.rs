@@ -7,7 +7,7 @@ use bevy::{
 use std::sync::Arc;
 
 use self::{
-    logic::{Inventory, Item, ItemBundle, ItemKind, ItemProperties, ItemStack, Layout},
+    logic::{Inventory, Item, ItemKind, ItemProperties, ItemStack},
     systems::WindowSystemsPlugin,
 };
 

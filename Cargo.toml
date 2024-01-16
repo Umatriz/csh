@@ -8,9 +8,10 @@ edition = "2021"
 [dependencies]
 bevy = "0.12.1"
 
-
 paste = "1.0.14"
 ndarray = "0.15.6"
+
+bevy_mod_picking = { version = "0.17.0", features = ["backend_egui"] }
 bevy_asset_loader = "0.19.0"
 bevy-inspector-egui = "0.22.1"
 

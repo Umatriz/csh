@@ -1,7 +1,10 @@
+#![allow(clippy::type_complexity)]
+
 use bevy::prelude::*;
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_mod_picking::DefaultPickingPlugins;
 use plugins::{
     camera::CameraPlugin, chest::ChestPlugin, crafting::CraftingPlugin, player::PlayerPlugin,
 };
@@ -17,6 +20,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins((EguiPlugin, WorldInspectorPlugin::new()))
+        .add_plugins(DefaultPickingPlugins)
         .add_plugins((PlayerPlugin, CameraPlugin, CraftingPlugin, ChestPlugin))
         .add_state::<GameState>()
         .add_loading_state(

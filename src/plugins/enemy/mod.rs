@@ -2,8 +2,6 @@ use bevy::{
     core::Name,
     ecs::{bundle::Bundle, component::Component},
     reflect::{std_traits::ReflectDefault, Reflect},
-    sprite::SpriteBundle,
-    transform::components::Transform,
 };
 
 #[derive(Debug, Component, Reflect)]

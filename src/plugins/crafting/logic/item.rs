@@ -29,15 +29,15 @@ pub enum ItemKind {
     Primitive,
 }
 
-#[derive(Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Reflect)]
+#[derive(Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Reflect, Default)]
 #[reflect(Default)]
 pub struct ItemProperties {}
 
-impl Default for ItemProperties {
-    fn default() -> Self {
-        Self {}
-    }
-}
+// impl Default for ItemProperties {
+//     fn default() -> Self {
+//         Self {}
+//     }
+// }
 
 #[derive(Component, Hash, Clone, PartialEq, Eq, Debug, Reflect)]
 #[reflect(Default)]
