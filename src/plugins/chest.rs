@@ -2,7 +2,6 @@ use bevy::{
     app::{Plugin, Startup, Update},
     core::Name,
     ecs::{
-        bundle::Bundle,
         component::Component,
         entity::Entity,
         event::{Event, EventReader},
