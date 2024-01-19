@@ -1,13 +1,17 @@
+use std::sync::RwLock;
+
 use bevy::{
     app::{Plugin, Startup, Update},
     core::Name,
     ecs::{
+        change_detection::DetectChangesMut,
         component::Component,
         entity::Entity,
-        event::{Event, EventReader},
+        event::{Event, EventReader, EventWriter},
         query::{With, Without},
         schedule::IntoSystemConfigs,
-        system::{Commands, Query, ResMut, Resource},
+        system::{Commands, EntityCommands, Query, ResMut, Resource},
+        world::EntityWorldMut,
     },
     math::Vec2,
     reflect::{std_traits::ReflectDefault, Reflect},
@@ -29,7 +33,7 @@ use crate::{item, item_kind, layout, utils::squared_distance};
 
 use super::{
     crafting::{
-        logic::{Inventory, Item, ItemStack},
+        logic::{Inventory, Item, ItemBundle, ItemStack, Layout},
         show_item,
     },
     player::Player,
@@ -41,6 +45,7 @@ impl Plugin for ChestPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_event::<CheckChest>()
             .register_type::<ChestWindowState>()
+            .init_resource::<MoveStack>()
             .add_plugins(ResourceInspectorPlugin::<ChestWindowState>::default())
             .add_systems(Startup, spawn_chest)
             .add_systems(
@@ -79,11 +84,8 @@ pub struct Chest;
 
 fn spawn_chest(mut commands: Commands, mut items_query: Query<(&mut Item, &mut ItemStack)>) {
     let mut inventory = Inventory::new();
-    inventory.add_combine(
-        &mut commands,
-        &mut items_query,
-        &layout![item! { "ExampleItem1", item_kind!(primitive), amount = 1, level = 1 }],
-    );
+    let item = item! { "ExampleItem1", item_kind!(primitive), amount = 1, level = 1 };
+    inventory.add_combine(&mut commands, &mut items_query, layout![item]);
     commands
         .spawn(Chest)
         .insert(inventory)
@@ -101,11 +103,8 @@ fn spawn_chest(mut commands: Commands, mut items_query: Query<(&mut Item, &mut I
         .insert(On::<Pointer<Click>>::send_event::<CheckChest>());
 
     let mut inventory = Inventory::new();
-    inventory.add_combine(
-        &mut commands,
-        &mut items_query,
-        &layout![item! { "ExampleItem2", item_kind!(primitive), amount = 1, level = 1 }],
-    );
+    let item = item! { "ExampleItem2", item_kind!(primitive), amount = 1, level = 1 };
+    inventory.add_combine(&mut commands, &mut items_query, layout![item]);
     commands
         .spawn(Chest)
         .insert(inventory)
@@ -150,12 +149,23 @@ fn check_chest(
     }
 }
 
+#[derive(Resource, Debug, PartialEq)]
+pub struct MoveStack(u8);
+
+impl Default for MoveStack {
+    fn default() -> Self {
+        Self(1)
+    }
+}
+
 fn handle_chest_inventory_window(
+    mut commands: Commands,
     mut contexts: EguiContexts,
     chest_state: Option<ResMut<ChestWindowState>>,
     mut player_inventory: Query<&mut Inventory, With<Player>>,
     mut chest_query: Query<&mut Inventory, (With<Chest>, Without<Player>)>,
-    items_query: Query<(&Item, &ItemStack)>,
+    mut items_query: Query<(&mut Item, &mut ItemStack)>,
+    mut move_stack: ResMut<MoveStack>,
 ) {
     if let Some(mut chest_state) = chest_state {
         let ChestWindowState {
@@ -163,23 +173,90 @@ fn handle_chest_inventory_window(
             right_inventory,
             ..
         } = chest_state.as_mut();
-        let chest_inventory = chest_query.get_mut(*right_inventory).unwrap();
-        let player_inventory = player_inventory.get_mut(*left_inventory).unwrap();
+        let mut chest_inventory = chest_query.get_mut(*right_inventory).unwrap();
+        let mut player_inventory = player_inventory.get_mut(*left_inventory).unwrap();
+
         egui::Window::new("Chest Inventory")
             .open(&mut chest_state.is_open)
             .show(contexts.ctx_mut(), |ui| {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
                     ui.vertical(|ui| {
-                        for entity in player_inventory.map.iter().filter_map(|x| *x) {
-                            if let Ok(item) = items_query.get(entity) {
-                                show_item(item, ui, true);
+                        for entity in player_inventory.map.clone().into_iter().flatten() {
+                            if let Ok((item, mut stack)) = items_query.get_mut(entity) {
+                                if stack.0 == 0 {
+                                    continue;
+                                }
+
+                                show_item((&item, &stack), ui, true);
+
+                                let max = stack.0;
+
+                                let move_button = ui.button("->");
+
+                                if move_button.clicked()
+                                    && player_inventory.take_linear(entity).is_some()
+                                {
+                                    stack.0 -= move_stack.0;
+                                    player_inventory.add_single(entity);
+
+                                    let layout = layout![ItemBundle {
+                                        item: item.clone(),
+                                        stack: ItemStack(move_stack.0)
+                                    }];
+
+                                    chest_inventory.add_combine(
+                                        &mut commands,
+                                        &mut items_query,
+                                        layout,
+                                    );
+
+                                    move_stack.set_if_neq(MoveStack::default());
+                                }
+
+                                move_button.context_menu(|ui| {
+                                    ui.label("Menu!");
+                                    ui.add(egui::Slider::new(&mut move_stack.as_mut().0, 1..=max));
+                                });
                             }
                         }
                     });
                     ui.vertical(|ui| {
-                        for entity in chest_inventory.map.iter().filter_map(|x| *x) {
-                            if let Ok(item) = items_query.get(entity) {
-                                show_item(item, ui, true);
+                        for entity in chest_inventory.map.clone().iter().filter_map(|x| *x) {
+                            if let Ok((item, mut stack)) = items_query.get_mut(entity) {
+                                if stack.0 == 0 {
+                                    continue;
+                                }
+
+                                show_item((&item, &stack), ui, true);
+
+                                let max = stack.0;
+
+                                let move_button = ui.button("<-");
+
+                                if move_button.clicked()
+                                    && chest_inventory.take_linear(entity).is_some()
+                                {
+                                    stack.0 -= move_stack.0;
+                                    chest_inventory.add_single(entity);
+
+                                    let layout = layout![ItemBundle {
+                                        item: item.clone(),
+                                        stack: ItemStack(move_stack.0)
+                                    }];
+
+                                    player_inventory.add_combine(
+                                        &mut commands,
+                                        &mut items_query,
+                                        layout,
+                                    );
+
+                                    move_stack.set_if_neq(MoveStack::default());
+                                }
+
+                                move_button.context_menu(|ui| {
+                                    ui.label("Menu!");
+                                    ui.add(egui::Slider::new(&mut move_stack.as_mut().0, 1..=max));
+                                });
                             }
                         }
                     });

@@ -16,7 +16,7 @@ use bevy_inspector_egui::{
 };
 use std::marker::PhantomData;
 
-use crate::plugins::player::Player;
+use crate::{layout, plugins::player::Player};
 
 use super::logic::{
     ClassicalWorkbench, ClassicalWorkbenchMap, Craft, Inventory, Item, ItemBundle, ItemStack,
@@ -97,10 +97,10 @@ fn add_item_window(
                     inventory.add_combine(
                         &mut commands,
                         &mut items_query,
-                        &Layout(vec![ItemBundle {
+                        layout![ItemBundle {
                             item: add_item_window.item.clone(),
                             stack: add_item_window.stack.clone(),
-                        }]),
+                        }],
                     );
                 } else {
                     println!("err")
@@ -161,7 +161,7 @@ fn craft<W: WorkbenchTag, M: WorkbenchMap + Resource>(
             }
 
             if let Some(layout) = workbench.craft(workbench_map.map(), input) {
-                player_inventory.add_combine(&mut commands, &mut items_query, &layout);
+                player_inventory.add_combine(&mut commands, &mut items_query, layout);
             } else {
                 error!("Crafting failed on stage: 2")
             }

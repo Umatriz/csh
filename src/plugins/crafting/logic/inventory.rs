@@ -8,6 +8,8 @@ use bevy::{
     reflect::{std_traits::ReflectDefault, Reflect},
 };
 
+use crate::layout;
+
 use super::{Item, ItemBundle, ItemStack, Layout};
 
 #[derive(Component, Default, Reflect)]
@@ -114,14 +116,14 @@ impl Inventory {
         &mut self,
         commands: &mut Commands,
         query: &mut Query<(&mut Item, &mut ItemStack)>,
-        layout: &ItemsLayout,
+        layout: Layout<ItemBundle>,
     ) {
         let items = layout.get();
 
-        for item_bundle in items {
+        for ItemBundle { item, stack } in items {
             if let Some((id, item_entity)) = self
                 .search_condition(&query.to_readonly(), |it, _, _| {
-                    it.name == item_bundle.item.name && it.kind == item_bundle.item.kind
+                    it.name == item.name && it.kind == item.kind
                 })
                 .and_then(|id| self.take(id).map(|ent| (id, ent)))
             {
@@ -130,7 +132,7 @@ impl Inventory {
                     query.get_mut(item_entity)
                 {
                     info!("Passed");
-                    item_in_inventory_stack.0 += item_bundle.stack.0;
+                    item_in_inventory_stack.0 += stack.0;
                     dbg!(&item_in_inventory);
                     self.map[id] = Some(item_entity);
                 } else {
@@ -138,7 +140,13 @@ impl Inventory {
                 }
             } else {
                 info!("Adding single existing entity");
-                self.add_single_new(commands, item_bundle.clone());
+                self.add_single_new(
+                    commands,
+                    ItemBundle {
+                        item: (*item).clone(),
+                        stack: (*stack).clone(),
+                    },
+                );
             }
         }
     }
