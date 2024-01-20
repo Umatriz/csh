@@ -20,8 +20,7 @@ use crate::{layout, plugins::player::Player};
 
 use super::logic::{
     ClassicalWorkbench, ClassicalWorkbenchMap, Craft, Inventory, Item, ItemBundle, ItemStack,
-    ItemsLayout, Layout, SecondWorkbench, SecondWorkbenchMap, Workbench, WorkbenchMap,
-    WorkbenchTag,
+    ItemsLayout, SecondWorkbench, SecondWorkbenchMap, Workbench, WorkbenchMap, WorkbenchTag,
 };
 
 pub struct WindowSystemsPlugin;
@@ -116,19 +115,6 @@ fn add_item_window(
         });
     }
 }
-
-// pub fn enchant(
-//     commands: &mut Commands,
-//     enchantment_table: &EnchantingTable,
-//     player_entity: Entity,
-//     player_properties: &mut PlayerProperties,
-//     item_properties: &mut ItemProperties,
-//     item_enchantments: &mut ItemEnchantments,
-//     enchantment: Arc<dyn Enchantment>,
-// ) {
-//     enchantment_table.enchant(item_enchantments, enchantment);
-//     item_enchantments.apply_unapplied(player_properties, item_properties, commands, player_entity);
-// }
 
 #[derive(Event)]
 pub struct CraftMessage<W: WorkbenchTag> {

@@ -1,15 +1,21 @@
 #![allow(clippy::type_complexity)]
 
-use bevy::prelude::*;
+use bevy::{
+    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    prelude::*,
+};
 use bevy_asset_loader::loading_state::{LoadingState, LoadingStateAppExt};
-use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::{
+    bevy_egui::{EguiContexts, EguiPlugin},
+    egui,
+};
 use bevy_mod_picking::DefaultPickingPlugins;
+use egui_plot::{AxisHints, Line};
 use plugins::{
     camera::CameraPlugin, chest::ChestPlugin, crafting::CraftingPlugin, player::PlayerPlugin,
 };
 
-pub mod lazy_eq;
 pub mod logic;
 pub mod plugins;
 pub mod utils;
@@ -21,13 +27,70 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins((EguiPlugin, WorldInspectorPlugin::new()))
         .add_plugins(DefaultPickingPlugins)
+        .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
         .add_plugins((PlayerPlugin, CameraPlugin, CraftingPlugin, ChestPlugin))
         .add_state::<GameState>()
         .add_loading_state(
             LoadingState::new(GameState::Loading).continue_to_state(GameState::Next), // .load_collection::<CursorFolderCollection>(),
         )
         // .add_systems(Startup, setup.run_if(in_state(GameState::Next)))
+        .add_systems(Update, show_plot_window)
+        .init_resource::<FpsPlot>()
         .run()
+}
+
+#[derive(Resource, Debug)]
+struct FpsPlot {
+    timer: Timer,
+    points: Vec<[f64; 2]>,
+}
+
+impl Default for FpsPlot {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(1.0, TimerMode::Repeating),
+            points: Default::default(),
+        }
+    }
+}
+
+fn show_plot_window(
+    mut contexts: EguiContexts,
+    mut points_resource: ResMut<FpsPlot>,
+    diagnostics: Res<DiagnosticsStore>,
+    time: Res<Time>,
+) {
+    egui::Window::new("FPS").show(contexts.ctx_mut(), |ui| {
+        let val_opt = diagnostics
+            .get(FrameTimeDiagnosticsPlugin::FPS)
+            .and_then(|fps| fps.smoothed());
+        if let Some(value) = val_opt {
+            if points_resource.timer.tick(time.delta()).just_finished() {
+                let point = [time.elapsed_seconds_f64(), value];
+                points_resource.points.push(point);
+            }
+        }
+        let line = Line::new(points_resource.points.clone());
+        ui.label(
+            egui::RichText::new(format!(
+                "FPS: {}",
+                val_opt
+                    .map(|v| v.round().to_string())
+                    .unwrap_or("N/A".to_string()),
+            ))
+            .size(20.0),
+        );
+
+        let x_axes = vec![AxisHints::default().label("Time")];
+        let y_axes = vec![AxisHints::default().label("FPS")];
+
+        egui_plot::Plot::new("FPS")
+            .view_aspect(2.0)
+            .allow_zoom(false)
+            .custom_x_axes(x_axes)
+            .custom_y_axes(y_axes)
+            .show(ui, |ui| ui.line(line))
+    });
 }
 
 // TODO: UI doesnt work

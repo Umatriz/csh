@@ -8,8 +8,6 @@ use bevy::{
     reflect::{std_traits::ReflectDefault, Reflect},
 };
 
-use crate::layout;
-
 use super::{Item, ItemBundle, ItemStack, Layout};
 
 #[derive(Component, Default, Reflect)]

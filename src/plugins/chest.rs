@@ -1,5 +1,3 @@
-use std::sync::RwLock;
-
 use bevy::{
     app::{Plugin, Startup, Update},
     core::Name,
@@ -7,11 +5,10 @@ use bevy::{
         change_detection::DetectChangesMut,
         component::Component,
         entity::Entity,
-        event::{Event, EventReader, EventWriter},
+        event::{Event, EventReader},
         query::{With, Without},
         schedule::IntoSystemConfigs,
-        system::{Commands, EntityCommands, Query, ResMut, Resource},
-        world::EntityWorldMut,
+        system::{Commands, Query, ResMut, Resource},
     },
     math::Vec2,
     reflect::{std_traits::ReflectDefault, Reflect},
@@ -33,7 +30,7 @@ use crate::{item, item_kind, layout, utils::squared_distance};
 
 use super::{
     crafting::{
-        logic::{Inventory, Item, ItemBundle, ItemStack, Layout},
+        logic::{Inventory, Item, ItemBundle, ItemStack},
         show_item,
     },
     player::Player,

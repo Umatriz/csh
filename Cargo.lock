@@ -1797,6 +1797,7 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_asset_loader",
  "bevy_mod_picking",
+ "egui_plot",
  "ndarray",
  "paste",
 ]
@@ -1874,6 +1875,15 @@ dependencies = [
  "ahash",
  "epaint 0.24.1",
  "nohash-hasher",
+]
+
+[[package]]
+name = "egui_plot"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29b484821a5b336af40a34151a940f52bef0f1ab56ec0d8cf80f74783eaae412"
+dependencies = [
+ "egui 0.24.1",
 ]
 
 [[package]]
