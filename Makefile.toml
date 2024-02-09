@@ -1,0 +1,10 @@
+[tasks.run-dev]
+command = "cargo"
+args = ["run", "--features", "bevy/dynamic_linking"]
+
+[tasks.run-two]
+run_task = { name = ["run-dev", "run-dev"], parallel = true }
+
+[tasks.synctest]
+command = "cargo"
+args = ["run", "--features", "bevy/dynamic_linking", "--", "--synctest"]

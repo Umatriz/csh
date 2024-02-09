@@ -1,38 +1,37 @@
 use bevy::{
     app::{Plugin, Startup, Update},
     ecs::{
+        entity::Entity,
         event::{Event, EventReader, EventWriter},
         query::With,
         reflect::AppTypeRegistry,
+        schedule::IntoSystemConfigs,
         system::{Commands, Query, Res, ResMut, Resource},
     },
-    log::error,
-    reflect::{std_traits::ReflectDefault, Reflect},
+    log::{error, warn},
 };
 use bevy_inspector_egui::{
     bevy_egui::EguiContexts,
     egui::{self, Ui},
-    quick::ResourceInspectorPlugin,
 };
+use bevy_replicon::{network_event::client_event::FromClient, server::has_authority};
 use std::marker::PhantomData;
 
-use crate::{layout, plugins::player::Player};
+use crate::{plugins::player::Player, LocalPlayer, WindowContext};
 
 use super::logic::{
-    ClassicalWorkbench, ClassicalWorkbenchMap, Craft, Inventory, Item, ItemBundle, ItemStack,
-    ItemsLayout, SecondWorkbench, SecondWorkbenchMap, Workbench, WorkbenchMap, WorkbenchTag,
+    ClassicalWorkbench, ClassicalWorkbenchMap, Craft, Inventory, Item, ItemBundle, ItemEvent,
+    ItemEventKind, ItemStack, ItemsLayout, Layout, SecondWorkbench, SecondWorkbenchMap, Workbench,
+    WorkbenchMap, WorkbenchTag,
 };
 
 pub struct WindowSystemsPlugin;
 
 impl Plugin for WindowSystemsPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.register_type::<WindowContext>()
-            .init_resource::<WindowContext>()
-            .init_resource::<AddItemWindow>()
+        app.init_resource::<AddItemWindow>()
             .add_event::<CraftMessage<ClassicalWorkbench>>()
             .add_event::<CraftMessage<SecondWorkbench>>()
-            .add_plugins(ResourceInspectorPlugin::<WindowContext>::default())
             .add_systems(Startup, spawn_test_workbench)
             .add_systems(
                 Update,
@@ -41,7 +40,10 @@ impl Plugin for WindowSystemsPlugin {
                     craft::<SecondWorkbench, SecondWorkbenchMap>,
                 ),
             )
-            .add_systems(Update, add_item_window)
+            .add_systems(
+                Update,
+                (add_item_window, add_item_event.run_if(has_authority())),
+            )
             .init_resource::<SecondWorkbenchMap>()
             .init_resource::<ClassicalWorkbenchMap>()
             .add_systems(
@@ -66,19 +68,20 @@ fn spawn_test_workbench(mut commands: Commands) {
 struct AddItemWindow {
     item: Item,
     stack: ItemStack,
+    selected_player: usize,
 }
 
 fn add_item_window(
     mut contexts: EguiContexts,
-    mut commands: Commands,
-    window_context: Res<WindowContext>,
+    mut window_context: ResMut<WindowContext>,
     mut add_item_window: ResMut<AddItemWindow>,
     type_registry: Res<AppTypeRegistry>,
-    mut player_query: Query<&mut Inventory, With<Player>>,
-    mut items_query: Query<(&mut Item, &mut ItemStack)>,
+
+    mut add_item_events: EventWriter<ItemEvent>,
 ) {
-    if window_context.add_item_window {
-        egui::Window::new("Add Item").show(contexts.ctx_mut(), |ui| {
+    egui::Window::new("Add Item")
+        .open(&mut window_context.add_item_window)
+        .show(contexts.ctx_mut(), |ui| {
             ui.label("Item:");
             bevy_inspector_egui::reflect_inspector::ui_for_value(
                 &mut add_item_window.item,
@@ -92,27 +95,44 @@ fn add_item_window(
                 &type_registry.read(),
             );
             if ui.button("Add").clicked() {
-                if let Ok(mut inventory) = player_query.get_single_mut() {
-                    inventory.add_combine(
-                        &mut commands,
-                        &mut items_query,
-                        layout![ItemBundle {
-                            item: add_item_window.item.clone(),
-                            stack: add_item_window.stack.clone(),
-                        }],
-                    );
-                } else {
-                    println!("err")
-                }
+                add_item_events.send(ItemEvent {
+                    kind: ItemEventKind::Add,
+                    inventory: None,
+                    item: ItemBundle {
+                        item: add_item_window.item.clone(),
+                        stack: add_item_window.stack.clone(),
+                    },
+                })
             }
             if ui.button("Clear Inventory").clicked() {
-                if let Ok(mut inventory) = player_query.get_single_mut() {
-                    inventory.map = vec![]
-                } else {
-                    println!("err")
-                }
+                // if let Ok(mut inventory) = player_query.get_single_mut() {
+                //     inventory.map = vec![]
+                // } else {
+                //     println!("err")
+                // }
             }
         });
+}
+
+fn add_item_event(
+    mut commands: Commands,
+    mut add_item_events: EventReader<FromClient<ItemEvent>>,
+    mut player_query: Query<(&mut Inventory, &Player)>,
+    mut items_query: Query<(&mut Item, &mut ItemStack)>,
+) {
+    for FromClient { client_id, event } in add_item_events.read() {
+        for (mut inventory, player) in player_query.iter_mut() {
+            if *client_id == player.0 {
+                match event.kind {
+                    ItemEventKind::Add => inventory.add_combine(
+                        &mut commands,
+                        &mut items_query,
+                        Layout(vec![event.item.clone()]),
+                    ),
+                    ItemEventKind::Remove => warn!("unimplemented"),
+                }
+            }
+        }
     }
 }
 
@@ -157,15 +177,6 @@ fn craft<W: WorkbenchTag, M: WorkbenchMap + Resource>(
     }
 }
 
-#[derive(Resource, Default, Reflect)]
-#[reflect(Default)]
-pub struct WindowContext {
-    workbench_window: bool,
-    inventory_window: bool,
-    enchantment_window: bool,
-    add_item_window: bool,
-}
-
 pub fn show_item(item_bundle: (&Item, &ItemStack), ui: &mut Ui, enabled: bool) {
     ui.add_enabled(enabled, |ui: &mut Ui| {
         ui.horizontal(|ui| {
@@ -197,57 +208,72 @@ fn handle_enchantment_window(
 
 fn handle_workbench_window<W: WorkbenchTag, M: WorkbenchMap + Resource>(
     mut contexts: EguiContexts,
-    workbench_window_state: Res<WindowContext>,
+    mut workbench_window_state: ResMut<WindowContext>,
     mut craft_event_message: EventWriter<CraftMessage<W>>,
     crafts_map: Res<M>,
-    player_query: Query<&Inventory, With<Player>>,
+    player_query: Query<(&Inventory, &Player)>,
     items_query: Query<(&Item, &ItemStack)>,
+    local_player: Option<Res<LocalPlayer>>,
 ) {
-    if workbench_window_state.workbench_window {
-        let inventory = player_query.get_single().unwrap();
-        egui::Window::new(crafts_map.name())
-            .resizable(true)
-            .show(contexts.ctx_mut(), |ui| {
-                for (input, output) in crafts_map.map().iter() {
-                    let enabled = inventory.search_satisfying(&items_query, input).is_some();
+    egui::Window::new(crafts_map.name())
+        .open(&mut workbench_window_state.workbench_window)
+        .resizable(true)
+        .show(contexts.ctx_mut(), |ui| {
+            if let Some(local_player) = local_player {
+                for (inventory, player) in player_query.iter() {
+                    if player.0 == local_player.0 {
+                        for (input, output) in crafts_map.map().iter() {
+                            let enabled =
+                                inventory.search_satisfying(&items_query, input).is_some();
 
-                    ui.horizontal(|ui| {
-                        show_craft_layout(input, ui, enabled);
+                            ui.horizontal(|ui| {
+                                show_craft_layout(input, ui, enabled);
 
-                        ui.separator();
+                                ui.separator();
 
-                        show_craft_layout(output, ui, enabled);
+                                show_craft_layout(output, ui, enabled);
 
-                        if ui
-                            .add_enabled(enabled, egui::Button::new("Craft"))
-                            .clicked()
-                        {
-                            craft_event_message.send(CraftMessage {
-                                input: input.clone(),
-                                output: output.clone(),
-                                _marker: PhantomData,
-                            })
+                                if ui
+                                    .add_enabled(enabled, egui::Button::new("Craft"))
+                                    .clicked()
+                                {
+                                    craft_event_message.send(CraftMessage {
+                                        input: input.clone(),
+                                        output: output.clone(),
+                                        _marker: PhantomData,
+                                    })
+                                }
+                            });
                         }
-                    });
+                    }
                 }
-            });
-    }
+            } else {
+                ui.label("No players");
+            }
+        });
 }
 
 fn handle_inventory_window(
     mut contexts: EguiContexts,
-    workbench_window_state: Res<WindowContext>,
-    player_query: Query<&Inventory, With<Player>>,
+    mut workbench_window_state: ResMut<WindowContext>,
+    player_query: Query<(&Inventory, &Player)>,
     input_items_query: Query<(&Item, &ItemStack)>,
 ) {
-    if workbench_window_state.inventory_window {
-        let inventory = player_query.get_single().unwrap();
-        egui::Window::new("Inventory").show(contexts.ctx_mut(), |ui| {
-            for entity in inventory.map.iter().filter_map(|x| *x) {
-                if let Ok(item) = input_items_query.get(entity) {
-                    show_item(item, ui, true);
+    egui::Window::new("Inventory")
+        .open(&mut workbench_window_state.inventory_window)
+        .show(contexts.ctx_mut(), |ui| {
+            ui.horizontal(|ui| {
+                for (inventory, player) in player_query.iter() {
+                    ui.vertical(|ui| {
+                        ui.label(format!("{}", player.0));
+                        for entity in inventory.map.iter().filter_map(|x| *x) {
+                            if let Ok(item) = input_items_query.get(entity) {
+                                show_item(item, ui, true);
+                            }
+                        }
+                    });
+                    ui.separator();
                 }
-            }
+            });
         });
-    }
 }

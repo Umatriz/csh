@@ -7,14 +7,27 @@ use bevy::{
     log::{error, info},
     reflect::{std_traits::ReflectDefault, Reflect},
 };
+use bevy_replicon::replicon_core::replication_rules::{MapNetworkEntities, Replication};
+use serde::{Deserialize, Serialize};
 
 use super::{Item, ItemBundle, ItemStack, Layout};
 
-#[derive(Component, Default, Reflect)]
+#[derive(Component, Default, Reflect, Serialize, Deserialize)]
 #[reflect(Default)]
 pub struct Inventory {
-    /// [`Entity`] should refer to the [`ItemBundle`]
     pub map: Vec<Option<Entity>>,
+}
+
+impl MapNetworkEntities for Inventory {
+    fn map_entities<T: bevy_replicon::prelude::Mapper>(&mut self, mapper: &mut T) {
+        for (opt, ent) in self
+            .map
+            .iter_mut()
+            .filter_map(|opt| (*opt).map(|ent| (opt, ent)))
+        {
+            *opt = Some(mapper.map(ent))
+        }
+    }
 }
 
 pub type ItemsLayout = Layout<ItemBundle>;
@@ -157,7 +170,7 @@ impl Inventory {
     }
 
     fn add_single_new(&mut self, commands: &mut Commands, item: ItemBundle) {
-        let id = commands.spawn(item).id();
+        let id = commands.spawn(item).insert(Replication).id();
         self.map.push(Some(id))
     }
 

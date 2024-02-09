@@ -3,11 +3,15 @@ use bevy::{
     ecs::{component::Component, entity::Entity, system::Commands},
     reflect::{std_traits::ReflectDefault, Reflect},
 };
+use bevy_replicon::{
+    network_event::{client_event::ClientEventAppExt, EventType},
+    replicon_core::replication_rules::AppReplicationExt,
+};
 
 use std::sync::Arc;
 
 use self::{
-    logic::{Inventory, Item, ItemKind, ItemProperties, ItemStack},
+    logic::{Inventory, Item, ItemEvent, ItemKind, ItemProperties, ItemStack},
     systems::WindowSystemsPlugin,
 };
 
@@ -33,6 +37,10 @@ impl Plugin for CraftingPlugin {
             .register_type::<ItemKind>()
             .register_type::<ItemStack>()
             .register_type::<ItemProperties>()
+            .replicate::<Item>()
+            .replicate::<ItemStack>()
+            .replicate_mapped::<Inventory>()
+            .add_mapped_client_event::<ItemEvent>(EventType::Ordered)
             .add_plugins(WindowSystemsPlugin);
     }
 }

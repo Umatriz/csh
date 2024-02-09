@@ -7,7 +7,7 @@ use bevy::{
         entity::Entity,
         event::{Event, EventReader},
         query::{With, Without},
-        schedule::IntoSystemConfigs,
+        schedule::{common_conditions::in_state, IntoSystemConfigs},
         system::{Commands, Query, ResMut, Resource},
     },
     math::Vec2,
@@ -26,7 +26,7 @@ use bevy_mod_picking::{
     PickableBundle,
 };
 
-use crate::{item, item_kind, layout, utils::squared_distance};
+use crate::{item, item_kind, layout, utils::squared_distance, GameState};
 
 use super::{
     crafting::{
@@ -50,7 +50,8 @@ impl Plugin for ChestPlugin {
                 (
                     check_chest,
                     handle_chest_inventory_window.after(check_chest),
-                ),
+                )
+                    .run_if(in_state(GameState::Game)),
             );
     }
 }
