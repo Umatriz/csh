@@ -1,4 +1,5 @@
 use bevy::{
+    asset::Handle,
     ecs::{
         component::Component,
         entity::Entity,
@@ -80,7 +81,7 @@ impl Inventory {
         })
     }
 
-    pub fn take(&mut self, id: usize) -> Option<Entity> {
+    fn take(&mut self, id: usize) -> Option<Entity> {
         self.map.get_mut(id).and_then(|opt| opt.take())
     }
 
@@ -127,11 +128,9 @@ impl Inventory {
         &mut self,
         commands: &mut Commands,
         query: &mut Query<(&mut Item, &mut ItemStack)>,
-        layout: Layout<ItemBundle>,
+        items: Vec<(&Item, &ItemStack)>,
     ) {
-        let items = layout.get();
-
-        for ItemBundle { item, stack } in items {
+        for (item, stack) in items {
             if let Some((id, item_entity)) = self
                 .search_condition(&query.to_readonly(), |it, _, _| {
                     it.name == item.name && it.kind == item.kind

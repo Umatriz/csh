@@ -1,28 +1,26 @@
 use bevy::{
-    app::{Plugin, Startup, Update},
+    app::{Plugin, Update},
+    asset::{Assets, Handle},
     ecs::{
-        entity::Entity,
         event::{Event, EventReader, EventWriter},
         query::With,
         reflect::AppTypeRegistry,
-        schedule::IntoSystemConfigs,
+        schedule::{common_conditions::in_state, IntoSystemConfigs},
         system::{Commands, Query, Res, ResMut, Resource},
     },
     log::{error, warn},
 };
+use bevy_asset_loader::asset_collection::AssetCollection;
 use bevy_inspector_egui::{
     bevy_egui::EguiContexts,
     egui::{self, Ui},
 };
 use bevy_replicon::{network_event::client_event::FromClient, server::has_authority};
-use std::marker::PhantomData;
 
-use crate::{plugins::player::Player, LocalPlayer, WindowContext};
+use crate::{plugins::player::Player, GameState, LocalPlayer, WindowContext};
 
 use super::logic::{
-    ClassicalWorkbench, ClassicalWorkbenchMap, Craft, Inventory, Item, ItemBundle, ItemEvent,
-    ItemEventKind, ItemStack, ItemsLayout, Layout, SecondWorkbench, SecondWorkbenchMap, Workbench,
-    WorkbenchMap, WorkbenchTag,
+    Inventory, Item, ItemBundle, ItemEvent, ItemEventKind, ItemStack, ItemsLayout, Workbench,
 };
 
 pub struct WindowSystemsPlugin;
@@ -30,27 +28,17 @@ pub struct WindowSystemsPlugin;
 impl Plugin for WindowSystemsPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.init_resource::<AddItemWindow>()
-            .add_event::<CraftMessage<ClassicalWorkbench>>()
-            .add_event::<CraftMessage<SecondWorkbench>>()
-            .add_systems(Startup, spawn_test_workbench)
-            .add_systems(
-                Update,
-                (
-                    craft::<ClassicalWorkbench, ClassicalWorkbenchMap>,
-                    craft::<SecondWorkbench, SecondWorkbenchMap>,
-                ),
-            )
+            .add_event::<CraftMessage>()
+            // .add_systems(Startup, spawn_test_workbench)
+            .add_systems(Update, craft.run_if(in_state(GameState::Game)))
             .add_systems(
                 Update,
                 (add_item_window, add_item_event.run_if(has_authority())),
             )
-            .init_resource::<SecondWorkbenchMap>()
-            .init_resource::<ClassicalWorkbenchMap>()
             .add_systems(
                 Update,
                 (
-                    handle_workbench_window::<ClassicalWorkbench, ClassicalWorkbenchMap>,
-                    handle_workbench_window::<SecondWorkbench, SecondWorkbenchMap>,
+                    handle_workbench_window,
                     handle_inventory_window,
                     handle_enchantment_window,
                 ),
@@ -58,17 +46,28 @@ impl Plugin for WindowSystemsPlugin {
     }
 }
 
-fn spawn_test_workbench(mut commands: Commands) {
-    commands.spawn(Workbench::<ClassicalWorkbench>::new());
-    commands.spawn(Workbench::<SecondWorkbench>::new());
-    // commands.spawn(EnchantingTable);
+#[derive(AssetCollection, Resource)]
+pub struct WorkbenchesCollection {
+    #[asset(path = "workbenches", collection(typed))]
+    workbenches: Vec<Handle<Workbench>>,
 }
+
+#[derive(AssetCollection, Resource)]
+pub struct ItemsCollection {
+    #[asset(path = "items", collection(typed))]
+    items: Vec<Handle<Item>>,
+}
+
+// fn spawn_test_workbench(mut commands: Commands) {
+//     commands.spawn(Workbench::<ClassicalWorkbench>::new());
+//     commands.spawn(Workbench::<SecondWorkbench>::new());
+//     // commands.spawn(EnchantingTable);
+// }
 
 #[derive(Resource, Default)]
 struct AddItemWindow {
     item: Item,
     stack: ItemStack,
-    selected_player: usize,
 }
 
 fn add_item_window(
@@ -76,7 +75,6 @@ fn add_item_window(
     mut window_context: ResMut<WindowContext>,
     mut add_item_window: ResMut<AddItemWindow>,
     type_registry: Res<AppTypeRegistry>,
-
     mut add_item_events: EventWriter<ItemEvent>,
 ) {
     egui::Window::new("Add Item")
@@ -127,7 +125,7 @@ fn add_item_event(
                     ItemEventKind::Add => inventory.add_combine(
                         &mut commands,
                         &mut items_query,
-                        Layout(vec![event.item.clone()]),
+                        vec![event.item.as_tuple()],
                     ),
                     ItemEventKind::Remove => warn!("unimplemented"),
                 }
@@ -137,24 +135,23 @@ fn add_item_event(
 }
 
 #[derive(Event)]
-pub struct CraftMessage<W: WorkbenchTag> {
+pub struct CraftMessage {
     pub input: ItemsLayout,
     pub output: ItemsLayout,
-    _marker: PhantomData<W>,
 }
 
-fn craft<W: WorkbenchTag, M: WorkbenchMap + Resource>(
+fn craft(
     mut commands: Commands,
-    mut event_message: EventReader<CraftMessage<W>>,
+    mut event_message: EventReader<CraftMessage>,
     mut player_query: Query<&mut Inventory, With<Player>>,
-    workbench_query: Query<&Workbench<W>>,
-    workbench_map: Res<M>,
+    workbenches: Res<WorkbenchesCollection>,
+    item_assets: Res<Assets<Item>>,
+    workbench_assets: Res<Assets<Workbench>>,
     mut items_query: Query<(&mut Item, &mut ItemStack)>,
 ) {
     for event in event_message.read() {
         let CraftMessage { input, .. } = event;
         let mut player_inventory = player_query.get_single_mut().unwrap();
-        let workbench = workbench_query.get_single().unwrap();
 
         if let Some(layout) =
             player_inventory.take_satisfying_layout(&items_query.to_readonly(), input)
@@ -166,10 +163,16 @@ fn craft<W: WorkbenchTag, M: WorkbenchMap + Resource>(
                 }
             }
 
-            if let Some(layout) = workbench.craft(workbench_map.map(), input) {
-                player_inventory.add_combine(&mut commands, &mut items_query, layout);
-            } else {
-                error!("Crafting failed on stage: 2")
+            for workbench in workbenches
+                .workbenches
+                .iter()
+                .filter_map(|h| workbench_assets.get(h))
+            {
+                if let Some(layout) = workbench.craft(&item_assets, input) {
+                    player_inventory.add_combine(&mut commands, &mut items_query, layout);
+                } else {
+                    error!("Crafting failed on stage: 2")
+                }
             }
         } else {
             error!("Crafting failed on stage: 1")
@@ -206,51 +209,50 @@ fn handle_enchantment_window(
 ) {
 }
 
-fn handle_workbench_window<W: WorkbenchTag, M: WorkbenchMap + Resource>(
+fn handle_workbench_window(
     mut contexts: EguiContexts,
     mut workbench_window_state: ResMut<WindowContext>,
-    mut craft_event_message: EventWriter<CraftMessage<W>>,
-    crafts_map: Res<M>,
+    mut craft_event_message: EventWriter<CraftMessage>,
     player_query: Query<(&Inventory, &Player)>,
     items_query: Query<(&Item, &ItemStack)>,
     local_player: Option<Res<LocalPlayer>>,
 ) {
-    egui::Window::new(crafts_map.name())
-        .open(&mut workbench_window_state.workbench_window)
-        .resizable(true)
-        .show(contexts.ctx_mut(), |ui| {
-            if let Some(local_player) = local_player {
-                for (inventory, player) in player_query.iter() {
-                    if player.0 == local_player.0 {
-                        for (input, output) in crafts_map.map().iter() {
-                            let enabled =
-                                inventory.search_satisfying(&items_query, input).is_some();
+    // egui::Window::new(crafts_map.name())
+    //     .open(&mut workbench_window_state.workbench_window)
+    //     .resizable(true)
+    //     .show(contexts.ctx_mut(), |ui| {
+    //         if let Some(local_player) = local_player {
+    //             for (inventory, player) in player_query.iter() {
+    //                 if player.0 == local_player.0 {
+    //                     for (input, output) in crafts_map.map().iter() {
+    //                         let enabled =
+    //                             inventory.search_satisfying(&items_query, input).is_some();
 
-                            ui.horizontal(|ui| {
-                                show_craft_layout(input, ui, enabled);
+    //                         ui.horizontal(|ui| {
+    //                             show_craft_layout(input, ui, enabled);
 
-                                ui.separator();
+    //                             ui.separator();
 
-                                show_craft_layout(output, ui, enabled);
+    //                             show_craft_layout(output, ui, enabled);
 
-                                if ui
-                                    .add_enabled(enabled, egui::Button::new("Craft"))
-                                    .clicked()
-                                {
-                                    craft_event_message.send(CraftMessage {
-                                        input: input.clone(),
-                                        output: output.clone(),
-                                        _marker: PhantomData,
-                                    })
-                                }
-                            });
-                        }
-                    }
-                }
-            } else {
-                ui.label("No players");
-            }
-        });
+    //                             if ui
+    //                                 .add_enabled(enabled, egui::Button::new("Craft"))
+    //                                 .clicked()
+    //                             {
+    //                                 craft_event_message.send(CraftMessage {
+    //                                     input: input.clone(),
+    //                                     output: output.clone(),
+    //                                     _marker: PhantomData,
+    //                                 })
+    //                             }
+    //                         });
+    //                     }
+    //                 }
+    //             }
+    //         } else {
+    //             ui.label("No players");
+    //         }
+    //     });
 }
 
 fn handle_inventory_window(

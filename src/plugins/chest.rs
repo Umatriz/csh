@@ -83,7 +83,7 @@ pub struct Chest;
 fn spawn_chest(mut commands: Commands, mut items_query: Query<(&mut Item, &mut ItemStack)>) {
     let mut inventory = Inventory::new();
     let item = item! { "ExampleItem1", item_kind!(primitive), amount = 1, level = 1 };
-    inventory.add_combine(&mut commands, &mut items_query, layout![item]);
+    inventory.add_combine(&mut commands, &mut items_query, vec![item.as_tuple()]);
     commands
         .spawn(Chest)
         .insert(inventory)
@@ -102,7 +102,7 @@ fn spawn_chest(mut commands: Commands, mut items_query: Query<(&mut Item, &mut I
 
     let mut inventory = Inventory::new();
     let item = item! { "ExampleItem2", item_kind!(primitive), amount = 1, level = 1 };
-    inventory.add_combine(&mut commands, &mut items_query, layout![item]);
+    inventory.add_combine(&mut commands, &mut items_query, vec![item.as_tuple()]);
     commands
         .spawn(Chest)
         .insert(inventory)
@@ -197,15 +197,14 @@ fn handle_chest_inventory_window(
                                     stack.0 -= move_stack.0;
                                     player_inventory.add_single(entity);
 
-                                    let layout = layout![ItemBundle {
-                                        item: item.clone(),
-                                        stack: ItemStack(move_stack.0)
-                                    }];
+                                    let it = &item.clone();
+                                    let stack = &ItemStack(move_stack.0);
+                                    let items = vec![(it, stack)];
 
                                     chest_inventory.add_combine(
                                         &mut commands,
                                         &mut items_query,
-                                        layout,
+                                        items,
                                     );
 
                                     move_stack.set_if_neq(MoveStack::default());
@@ -237,15 +236,14 @@ fn handle_chest_inventory_window(
                                     stack.0 -= move_stack.0;
                                     chest_inventory.add_single(entity);
 
-                                    let layout = layout![ItemBundle {
-                                        item: item.clone(),
-                                        stack: ItemStack(move_stack.0)
-                                    }];
+                                    let it = &item.clone();
+                                    let stack = &ItemStack(move_stack.0);
+                                    let items = vec![(it, stack)];
 
                                     player_inventory.add_combine(
                                         &mut commands,
                                         &mut items_query,
-                                        layout,
+                                        items,
                                     );
 
                                     move_stack.set_if_neq(MoveStack::default());

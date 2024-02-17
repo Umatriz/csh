@@ -5,7 +5,10 @@ use bevy::prelude::*;
 use bevy_asset_loader::loading_state::{
     config::ConfigureLoadingState, LoadingState, LoadingStateAppExt,
 };
-use bevy_inspector_egui::quick::{ResourceInspectorPlugin, WorldInspectorPlugin};
+use bevy_inspector_egui::quick::{
+    AssetInspectorPlugin, ResourceInspectorPlugin, WorldInspectorPlugin,
+};
+use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_inspector_egui::{
     bevy_egui::{EguiContexts, EguiPlugin},
     egui,
@@ -32,6 +35,9 @@ use bevy_replicon::{
     ReplicationPlugins,
 };
 
+use plugins::assets::AssetsLoadingPlugin;
+use plugins::crafting::logic::Workbench;
+use plugins::crafting::WorkbenchesCollection;
 use plugins::{
     camera::CameraPlugin,
     crafting::CraftingPlugin,
@@ -67,14 +73,10 @@ fn main() {
             PlayerPlugin,
             CameraPlugin,
             CraftingPlugin,
+            AssetsLoadingPlugin,
             // ChestPlugin
         ))
         .add_state::<GameState>()
-        .add_loading_state(
-            LoadingState::new(GameState::Loading)
-                .continue_to_state(GameState::Menu)
-                .load_collection::<PlayerCollection>(), // .load_collection::<CursorFolderCollection>(),
-        )
         .init_resource::<MenuContext>()
         .replicate::<Transform>()
         .replicate::<PlayerColor>()
@@ -89,9 +91,23 @@ fn main() {
                 input_system,
             ),
         )
+        .add_plugins(AssetInspectorPlugin::<Workbench>::default())
         .add_systems(PreUpdate, player_init_system.after(ClientSet::Receive))
         .run()
 }
+
+#[derive(Resource)]
+struct Wrapper(Handle<Workbench>);
+
+// fn test_workbench_loading(
+//     asset_server: Res<AssetServer>,
+//     mut commands: Commands,
+//     // mut workbenches: ResMut<Assets<WorkbenchAsset>>,
+// ) {
+//     let handle = asset_server.load::<Workbench>("classical.workbench.ron");
+
+//     commands.insert_resource(Wrapper(handle));
+// }
 
 #[derive(Resource, Default, Reflect)]
 #[reflect(Default)]

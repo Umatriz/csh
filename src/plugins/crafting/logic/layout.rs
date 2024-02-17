@@ -1,4 +1,7 @@
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+use bevy::reflect::TypePath;
+use serde::Deserialize;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Deserialize, TypePath)]
 pub struct Layout<T>(pub Vec<T>);
 
 impl<T> Layout<T> {

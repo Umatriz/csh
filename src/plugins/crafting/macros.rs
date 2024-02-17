@@ -1,3 +1,11 @@
+use bevy::{
+    asset::{Asset, Handle},
+    reflect::TypePath,
+    utils::HashMap,
+};
+
+use super::logic::Item;
+
 /// Select the `ItemKind` uses in `item! macro
 /// Example:
 /// ```rust
@@ -108,4 +116,196 @@ macro_rules! workbench {
             }
         }
     };
+}
+
+macro_rules! asset_project {
+    (
+        $($tt:tt)*
+    ) => {
+        __asset_project_internal! {
+            []
+            $($tt)*
+        }
+    };
+}
+
+macro_rules! __asset_project_internal {
+    (
+        [$($attrs:tt)*]
+
+        #[$($attr:tt)*]
+        $($tt:tt)*
+    ) => {
+        __asset_project_internal! {
+            [$($attrs)* #[$($attr)*]]
+            $($tt)*
+        }
+    };
+    (
+        [$($attrs:tt)*]
+        $vis:vis $struct_ty_ident:ident $ident:ident
+        $($tt:tt)*
+    ) => {
+        __asset_project_parse! {
+            [$($attrs)*]
+            [$vis $struct_ty_ident $ident]
+
+            $($tt)*
+        }
+    };
+}
+
+macro_rules! __asset_project_parse {
+    (
+        [$($attrs:tt)*]
+        [$vis:vis $struct_ty_ident:ident $ident:ident]
+
+        {
+            $($body_data:tt)*
+        }
+    ) => {
+        __asset_project_expand! {
+            [$($attrs)* $vis $struct_ty_ident $ident]
+            {
+                $($body_data)*
+            }
+        }
+    };
+}
+
+macro_rules! __asset_project_expand {
+    (
+        [$(#[$attrs:meta])* $vis:vis $struct_ty_ident:ident $ident:ident]
+        {
+            $($body_data:tt)*
+        }
+    ) => {
+        __asset_project_construct! {
+            [$(#[$attrs])* $vis $struct_ty_ident $ident]
+            {
+                $($body_data)*
+            }
+        }
+    };
+}
+
+macro_rules! __asset_project_construct {
+    (
+        [$(#[$attrs:meta])* $vis:vis struct $ident:ident]
+
+        {
+            $(
+                $field_vis:vis $field:ident: $field_ty:ty
+            ),+ $(,)?
+        }
+    ) => {
+        $(#[$attrs])*
+        $vis struct $ident
+        {
+            $(
+                $field_vis $field: $field_ty
+            ),+
+        }
+    };
+    (
+        [$(#[$attrs:meta])* $vis:vis enum $ident:ident]
+
+        {
+            $(
+                $(#[$variant_attrs:meta])*
+                $variant:ident $({
+                    $(
+                        $field:ident: $field_ty:ty
+                    ),+ $(,)?
+                })?
+            ),+ $(,)?
+        }
+    ) => {
+        $(#[$attrs])*
+        $vis enum $ident
+        {
+            $(
+                $(#[$variant_attrs])*
+                $variant $({
+                    $(
+                        $field: $field_ty
+                    ),+
+                })?
+            ),+
+        }
+    };
+}
+
+macro_rules! type_check {( $($input:tt)* ) => (
+    muncher! {
+        [input: $($input)* ]
+        [output: ]
+    }
+)}
+use type_check;
+
+macro_rules! muncher {
+    (
+        [input:
+            Handle<$T:ty $(,)?>
+            $($rest:tt)*
+        ]
+        [output: $($output:tt)* ]
+    ) => (muncher! {
+        [input:
+            $($rest)*
+        ]
+        [output: $($output)*
+            String
+        ]
+    });
+
+    (
+        [input:
+            Handle<$T:ty $(,)?>>
+            $($rest:tt)*
+        ]
+        $output:tt
+    ) => (muncher! {
+        [input:
+            Handle<$T> >
+            $($rest)*
+        ]
+        $output
+    });
+
+    (
+        [input:
+            $not_Handle:tt
+            $($rest:tt)*
+        ]
+        [output: $($output:tt)*]
+    ) => (muncher! {
+        [input:
+            $($rest)*
+        ]
+        [output: $($output)*
+            $not_Handle
+        ]
+    });
+
+    (
+        [input: /* nothing left */ ]
+        [output: $($output:tt)* ]
+    ) => (
+        $($output)*
+    )
+}
+use muncher;
+
+type AT = type_check! {
+    HashMap<Vec<(Handle<Item>, String)>, Vec<Handle<Item>>>
+};
+
+asset_project! {
+    #[derive(Asset, TypePath)]
+    pub struct A {
+        pub test: Vec<Handle<Item>>,
+        pub test2: HashMap<Vec<Handle<Item>>, Vec<Handle<Item>>>
+    }
 }

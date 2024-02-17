@@ -1,8 +1,10 @@
 use bevy::{
     app::Plugin,
+    asset::AssetApp,
     ecs::{component::Component, entity::Entity, system::Commands},
     reflect::{std_traits::ReflectDefault, Reflect},
 };
+use bevy_common_assets::ron::RonAssetPlugin;
 use bevy_replicon::{
     network_event::{client_event::ClientEventAppExt, EventType},
     replicon_core::replication_rules::AppReplicationExt,
@@ -11,7 +13,10 @@ use bevy_replicon::{
 use std::sync::Arc;
 
 use self::{
-    logic::{Inventory, Item, ItemEvent, ItemKind, ItemProperties, ItemStack},
+    logic::{
+        Inventory, Item, ItemBundle, ItemEvent, ItemKind, ItemProperties, ItemStack,
+        WorkbenchPlugin,
+    },
     systems::WindowSystemsPlugin,
 };
 
@@ -21,7 +26,7 @@ pub mod logic;
 mod macros;
 mod systems;
 
-pub use systems::show_item;
+pub use systems::{show_item, ItemsCollection, WorkbenchesCollection};
 
 pub struct CraftingPlugin;
 
@@ -41,7 +46,9 @@ impl Plugin for CraftingPlugin {
             .replicate::<ItemStack>()
             .replicate_mapped::<Inventory>()
             .add_mapped_client_event::<ItemEvent>(EventType::Ordered)
-            .add_plugins(WindowSystemsPlugin);
+            .add_plugins(RonAssetPlugin::<Item>::new(&["item.ron"]))
+            .register_asset_reflect::<Item>()
+            .add_plugins((WindowSystemsPlugin, WorkbenchPlugin));
     }
 }
 
