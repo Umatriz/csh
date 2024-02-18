@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod camera;
 pub mod chest;
 pub mod crafting;

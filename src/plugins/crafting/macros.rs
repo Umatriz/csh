@@ -240,6 +240,7 @@ macro_rules! type_check {( $($input:tt)* ) => (
     muncher! {
         [input: $($input)* ]
         [output: ]
+        [mode: default]
     }
 )}
 use type_check;
@@ -251,6 +252,7 @@ macro_rules! muncher {
             $($rest:tt)*
         ]
         [output: $($output:tt)* ]
+        $mode:tt
     ) => (muncher! {
         [input:
             $($rest)*
@@ -258,6 +260,7 @@ macro_rules! muncher {
         [output: $($output)*
             String
         ]
+        $mode
     });
 
     (
@@ -265,14 +268,37 @@ macro_rules! muncher {
             Handle<$T:ty $(,)?>>
             $($rest:tt)*
         ]
-        $output:tt
+        [output: $($output:tt)* ]
+        $mode:tt
     ) => (muncher! {
         [input:
             Handle<$T> >
             $($rest)*
         ]
-        $output
+        [output: $($output)*]
+        $mode
     });
+
+    (
+        [input:
+            ( $($group:tt)* )
+            $($rest:tt)*
+        ]
+        [output: $($output:tt)* ]
+        $mode:tt
+    ) => (
+        muncher! {
+            [input: $($rest)* ]
+            [output: $($output)* (
+                muncher! {
+                    [input: $($group)*]
+                    [output: ]
+                    [mode: parenthesized]
+                }
+            )]
+            $mode
+        }
+    );
 
     (
         [input:
@@ -280,6 +306,7 @@ macro_rules! muncher {
             $($rest:tt)*
         ]
         [output: $($output:tt)*]
+        $mode:tt
     ) => (muncher! {
         [input:
             $($rest)*
@@ -287,19 +314,29 @@ macro_rules! muncher {
         [output: $($output)*
             $not_Handle
         ]
+        $mode
     });
 
     (
         [input: /* nothing left */ ]
         [output: $($output:tt)* ]
+        [mode: default]
     ) => (
         $($output)*
-    )
+    );
+
+    (
+        [input: /* nothing left! */]
+        [output: $($output:tt)*]
+        [mode: parenthesized]
+    ) => (
+        ( $($output)* )
+    );
 }
 use muncher;
 
 type AT = type_check! {
-    HashMap<Vec<(Handle<Item>, String)>, Vec<Handle<Item>>>
+    Result<(Handle<Item>, String), Handle<Item>>
 };
 
 asset_project! {
