@@ -45,6 +45,8 @@ use plugins::{
 };
 
 pub mod args;
+pub mod asset_macro;
+pub mod asset_ref;
 pub mod logic;
 pub mod network;
 pub mod plugins;

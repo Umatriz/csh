@@ -1,5 +1,6 @@
 (
+    name: "Classical",
     recipes: {
-        [("items/item1.item.ron", ItemStack(1))]: [("items/item2.item.ron", ItemStack(1))]
+        [(Path("items/item1.item.ron"), ItemStack(1))]: [(Path("items/item2.item.ron"), ItemStack(1))]
     }
 )

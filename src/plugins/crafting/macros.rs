@@ -195,6 +195,7 @@ macro_rules! __asset_project_construct {
 
         {
             $(
+                $(#[$field_attr:meta])*
                 $field_vis:vis $field:ident: $field_ty:ty
             ),+ $(,)?
         }
@@ -203,6 +204,7 @@ macro_rules! __asset_project_construct {
         $vis struct $ident
         {
             $(
+                $(#[$field_attr])*
                 $field_vis $field: $field_ty
             ),+
         }
@@ -236,16 +238,26 @@ macro_rules! __asset_project_construct {
     };
 }
 
-macro_rules! type_check {( $($input:tt)* ) => (
-    muncher! {
-        [input: $($input)* ]
-        [output: ]
-        [mode: default]
-    }
-)}
-use type_check;
+macro_rules! __type_check {
+    ( [s] $($input:tt)* ) => (
+        __type_check_muncher! {
+            [input: $($input)* ]
+            [output: ]
+            [mode: string]
+        }
+    );
 
-macro_rules! muncher {
+    ( $($input:tt)* ) => (
+        __type_check_muncher! {
+            [input: $($input)* ]
+            [output: ]
+            [mode: default]
+        }
+    );
+}
+use __type_check;
+
+macro_rules! __type_check_muncher {
     (
         [input:
             Handle<$T:ty $(,)?>
@@ -253,7 +265,7 @@ macro_rules! muncher {
         ]
         [output: $($output:tt)* ]
         $mode:tt
-    ) => (muncher! {
+    ) => (__type_check_muncher! {
         [input:
             $($rest)*
         ]
@@ -270,7 +282,7 @@ macro_rules! muncher {
         ]
         [output: $($output:tt)* ]
         $mode:tt
-    ) => (muncher! {
+    ) => (__type_check_muncher! {
         [input:
             Handle<$T> >
             $($rest)*
@@ -287,18 +299,63 @@ macro_rules! muncher {
         [output: $($output:tt)* ]
         $mode:tt
     ) => (
-        muncher! {
+        __type_check_muncher! {
             [input: $($rest)* ]
-            [output: $($output)* (
-                muncher! {
+            [output: $($output)*
+                __type_check_muncher! {
                     [input: $($group)*]
                     [output: ]
-                    [mode: parenthesized]
+                    [mode: parentheses]
                 }
-            )]
+            ]
             $mode
         }
     );
+
+    (
+        [input:
+            { $($group:tt)* }
+            $($rest:tt)*
+        ]
+        [output: $($output:tt)* ]
+        $mode:tt
+    ) => (
+        __type_check_muncher! {
+            [input: $($rest)* ]
+            [output: $($output)*
+                __type_check_muncher! {
+                    [input: $($group)*]
+                    [output: ]
+                    [mode: braces]
+                }
+            ]
+            $mode
+        }
+    );
+
+    (
+        [input:
+            [ $($group:tt)* ]
+            $($rest:tt)*
+        ]
+        [output:
+            $($output:tt)*
+        ]
+        $mode:tt
+    ) => (__type_check_muncher! {
+        [input:
+            $($rest)*
+        ]
+        [output:
+            $($output)*
+            __type_check_muncher! {
+                [input: $($group)*]
+                [output: ]
+                [mode: square_brackets]
+            }
+        ]
+        $mode
+    });
 
     (
         [input:
@@ -307,7 +364,7 @@ macro_rules! muncher {
         ]
         [output: $($output:tt)*]
         $mode:tt
-    ) => (muncher! {
+    ) => (__type_check_muncher! {
         [input:
             $($rest)*
         ]
@@ -326,18 +383,38 @@ macro_rules! muncher {
     );
 
     (
+        [input: /* nothing left */ ]
+        [output: $($output:tt)* ]
+        [mode: string]
+    ) => (
+        stringify!($($output)*)
+    );
+
+    (
         [input: /* nothing left! */]
         [output: $($output:tt)*]
-        [mode: parenthesized]
+        [mode: parentheses]
     ) => (
         ( $($output)* )
     );
-}
-use muncher;
 
-type AT = type_check! {
-    Result<(Handle<Item>, String), Handle<Item>>
-};
+    (
+        [input: /* nothing left! */]
+        [output: $($output:tt)*]
+        [mode: square_brackets]
+    ) => (
+        [ $($output)* ]
+    );
+
+    (
+        [input: /* nothing left! */]
+        [output: $($output:tt)*]
+        [mode: braces]
+    ) => (
+        { $($output)* }
+    );
+}
+use __type_check_muncher;
 
 asset_project! {
     #[derive(Asset, TypePath)]
@@ -345,4 +422,13 @@ asset_project! {
         pub test: Vec<Handle<Item>>,
         pub test2: HashMap<Vec<Handle<Item>>, Vec<Handle<Item>>>
     }
+}
+
+#[test]
+fn feature() {
+    dbg!(__type_check! {
+        [s]
+        pub test: Vec<Handle<Item>>,
+        pub(crate) test2: Vec<Handle<Item>>,
+    });
 }
