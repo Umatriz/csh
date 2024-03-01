@@ -1,5 +1,4 @@
 use bevy::{
-    asset::Handle,
     ecs::{
         component::Component,
         entity::Entity,

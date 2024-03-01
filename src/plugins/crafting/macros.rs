@@ -71,53 +71,6 @@ macro_rules! layout {
     };
 }
 
-/// It can be used to create a new Workbench
-/// ```
-/// workbench! {
-///     Classical,
-///     item! { "1", item_kind!(primitive), amount = 1, level = 1 }
-///     =>
-///     item! { "2", item_kind!(primitive), amount = 1, level = 1 },
-/// }
-/// ```
-#[macro_export(local_inner_macros)]
-macro_rules! workbench {
-    (
-        $name:ident,
-        $($($in_item:expr),* => $($out_item:expr),*);*
-    ) => {
-        paste::paste! {
-            pub enum [<$name Workbench>] {}
-            impl $crate::plugins::crafting::logic::WorkbenchTag for [<$name Workbench>] {}
-
-            impl $crate::plugins::crafting::logic::WorkbenchMap for [<$name WorkbenchMap>] {
-                fn name(&self) -> &'static str {
-                    stringify!([<$name Workbench>])
-                }
-
-                fn map(&self) -> &CraftsMap {
-                    &self.map
-                }
-            }
-
-            #[derive(bevy::prelude::Resource)]
-            pub struct [<$name WorkbenchMap>] {
-                pub map: $crate::plugins::crafting::logic::CraftsMap,
-            }
-
-            impl Default for [<$name WorkbenchMap>] {
-                fn default() -> Self {
-                    Self {
-                        map: bevy::utils::hashbrown::HashMap::from([
-                            $( (layout![$($in_item,)*], layout![$( $out_item, )*]),)*
-                        ]),
-                    }
-                }
-            }
-        }
-    };
-}
-
 macro_rules! asset_project {
     (
         $($tt:tt)*

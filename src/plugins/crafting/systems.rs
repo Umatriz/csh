@@ -17,7 +17,10 @@ use bevy_inspector_egui::{
 };
 use bevy_replicon::{network_event::client_event::FromClient, server::has_authority};
 
-use crate::{plugins::player::Player, GameState, LocalPlayer, WindowContext};
+use crate::{
+    plugins::{network::LocalPlayer, player::Player},
+    GameState, WindowContext,
+};
 
 use super::logic::{
     Inventory, Item, ItemBundle, ItemEvent, ItemEventKind, ItemStack, ItemsLayout, Workbench,
@@ -33,7 +36,8 @@ impl Plugin for WindowSystemsPlugin {
             .add_systems(Update, craft.run_if(in_state(GameState::Game)))
             .add_systems(
                 Update,
-                (add_item_window, add_item_event.run_if(has_authority())),
+                (add_item_window, add_item_event.run_if(has_authority()))
+                    .run_if(in_state(GameState::Game)),
             )
             .add_systems(
                 Update,
@@ -68,12 +72,15 @@ pub struct ItemsCollection {
 struct AddItemWindow {
     item: Item,
     stack: ItemStack,
+    selected_item: usize,
 }
 
 fn add_item_window(
     mut contexts: EguiContexts,
     mut window_context: ResMut<WindowContext>,
     mut add_item_window: ResMut<AddItemWindow>,
+    items: Res<ItemsCollection>,
+    items_asset: Res<Assets<Item>>,
     type_registry: Res<AppTypeRegistry>,
     mut add_item_events: EventWriter<ItemEvent>,
 ) {
@@ -81,11 +88,20 @@ fn add_item_window(
         .open(&mut window_context.add_item_window)
         .show(contexts.ctx_mut(), |ui| {
             ui.label("Item:");
-            bevy_inspector_egui::reflect_inspector::ui_for_value(
-                &mut add_item_window.item,
-                ui,
-                &type_registry.read(),
-            );
+            egui::ComboBox::from_label("Select Item")
+                .selected_text(format!("{}", add_item_window.selected_item))
+                .show_ui(ui, |ui| {
+                    for i in 0..items.items.len() {
+                        let value = ui.selectable_value(
+                            &mut &items.items[i],
+                            &items.items[add_item_window.selected_item],
+                            format!("{:?}", items_asset.get(&items.items[i]).unwrap()),
+                        );
+                        if value.clicked() {
+                            add_item_window.selected_item = i;
+                        }
+                    }
+                });
             ui.label("Stack:");
             bevy_inspector_egui::reflect_inspector::ui_for_value(
                 &mut add_item_window.stack,
@@ -97,7 +113,10 @@ fn add_item_window(
                     kind: ItemEventKind::Add,
                     inventory: None,
                     item: ItemBundle {
-                        item: add_item_window.item.clone(),
+                        item: items_asset
+                            .get(&items.items[add_item_window.selected_item])
+                            .unwrap()
+                            .clone(),
                         stack: add_item_window.stack.clone(),
                     },
                 })

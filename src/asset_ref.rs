@@ -1,11 +1,13 @@
 use std::hash::Hash;
 
 use bevy::{
-    asset::{Asset, Handle},
-    reflect::{std_traits::ReflectDefault, Reflect},
+    asset::{Asset, AsyncReadExt, Handle},
+    reflect::{std_traits::ReflectDefault, Reflect, TypePath},
     utils::hashbrown::HashMap,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::plugins::crafting::logic::Item;
 
 use self::macros::{impl_loadable_for_tuple, impl_loadable_for_type};
 
@@ -49,6 +51,8 @@ impl<A: Asset> AssetRef<A> {
         }
     }
 }
+
+impl<T> Loadable for &mut T {}
 
 pub trait Loadable {
     fn load(&mut self, _load_context: &mut bevy::asset::LoadContext) {}
