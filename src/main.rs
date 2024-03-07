@@ -7,17 +7,15 @@ use bevy_inspector_egui::quick::{
     AssetInspectorPlugin, ResourceInspectorPlugin, WorldInspectorPlugin,
 };
 use bevy_mod_picking::DefaultPickingPlugins;
-use bevy_replicon::{
-    client::ClientSet,
-    network_event::{
-        client_event::{ClientEventAppExt, FromClient},
-        EventType,
-    },
-    replicon_core::replication_rules::AppReplicationExt,
-    server::{has_authority, ServerPlugin, TickPolicy},
-    ReplicationPlugins,
-};
 
+use bevy_replicon::client::ClientSet;
+use bevy_replicon::core::common_conditions::has_authority;
+use bevy_replicon::core::replication_rules::AppReplicationExt;
+use bevy_replicon::core::replicon_channels::ChannelKind;
+use bevy_replicon::network_event::client_event::{ClientEventAppExt, FromClient};
+use bevy_replicon::RepliconPlugins;
+use bevy_replicon_renet::RepliconRenetPlugins;
+use bevy_xpbd_2d::plugins::{PhysicsDebugPlugin, PhysicsPlugins};
 use plugins::assets::AssetsLoadingPlugin;
 use plugins::crafting::logic::Workbench;
 use plugins::cursor::CursorPlugin;
@@ -31,8 +29,8 @@ use plugins::{
 pub mod args;
 pub mod asset_macro;
 pub mod asset_ref;
-pub mod logic;
 pub mod plugins;
+pub mod spring;
 pub mod utils;
 
 pub use core::stringify;
@@ -42,10 +40,8 @@ fn main() {
         .register_type::<WindowContext>()
         .init_resource::<WindowContext>()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
-        .add_plugins(ReplicationPlugins.set(ServerPlugin {
-            tick_policy: TickPolicy::MaxTickRate(60),
-            ..Default::default()
-        }))
+        .add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()))
+        .add_plugins((RepliconPlugins, RepliconRenetPlugins))
         .add_plugins((EguiPlugin, WorldInspectorPlugin::new()))
         .add_plugins(DefaultPickingPlugins)
         .add_plugins(ResourceInspectorPlugin::<WindowContext>::default())
@@ -59,15 +55,15 @@ fn main() {
             CursorPlugin,
             // ChestPlugin
         ))
-        .add_state::<GameState>()
+        .init_state::<GameState>()
         .replicate::<Transform>()
         .replicate::<PlayerColor>()
         .replicate::<Player>()
-        .add_client_event::<MoveDirection>(EventType::Ordered)
+        .add_client_event::<MoveDirection>(ChannelKind::Ordered)
         .add_systems(
             Update,
             (
-                movement_system.run_if(has_authority()), // Runs only on the server or a single player.
+                movement_system.run_if(has_authority), // Runs only on the server or a single player.
                 input_system,
             ),
         )
@@ -92,11 +88,11 @@ struct Wrapper(Handle<Workbench>);
 #[derive(Resource, Default, Reflect)]
 #[reflect(Default)]
 pub struct WindowContext {
+    menu_window: bool,
     workbench_window: bool,
     inventory_window: bool,
     enchantment_window: bool,
     add_item_window: bool,
-    menu_window: bool,
 }
 
 fn player_init_system(mut commands: Commands, spawned_players: Query<Entity, Added<Player>>) {
@@ -122,18 +118,18 @@ fn player_init_system(mut commands: Commands, spawned_players: Query<Entity, Add
 }
 
 /// Reads player inputs and sends [`MoveCommandEvents`]
-fn input_system(mut move_events: EventWriter<MoveDirection>, input: Res<Input<KeyCode>>) {
+fn input_system(mut move_events: EventWriter<MoveDirection>, input: Res<ButtonInput<KeyCode>>) {
     let mut direction = Vec2::ZERO;
-    if input.pressed(KeyCode::Right) {
+    if input.pressed(KeyCode::ArrowRight) {
         direction.x += 1.0;
     }
-    if input.pressed(KeyCode::Left) {
+    if input.pressed(KeyCode::ArrowLeft) {
         direction.x -= 1.0;
     }
-    if input.pressed(KeyCode::Up) {
+    if input.pressed(KeyCode::ArrowUp) {
         direction.y += 1.0;
     }
-    if input.pressed(KeyCode::Down) {
+    if input.pressed(KeyCode::ArrowDown) {
         direction.y -= 1.0;
     }
     if direction != Vec2::ZERO {

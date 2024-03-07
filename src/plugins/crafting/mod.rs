@@ -6,8 +6,8 @@ use bevy::{
 };
 use bevy_common_assets::ron::RonAssetPlugin;
 use bevy_replicon::{
-    network_event::{client_event::ClientEventAppExt, EventType},
-    replicon_core::replication_rules::AppReplicationExt,
+    core::{replication_rules::AppReplicationExt, replicon_channels::ChannelKind},
+    network_event::client_event::ClientEventAppExt,
 };
 
 use std::sync::Arc;
@@ -45,7 +45,7 @@ impl Plugin for CraftingPlugin {
             .replicate::<Item>()
             .replicate::<ItemStack>()
             .replicate_mapped::<Inventory>()
-            .add_mapped_client_event::<ItemEvent>(EventType::Ordered)
+            .add_mapped_client_event::<ItemEvent>(ChannelKind::Ordered)
             .add_plugins(RonAssetPlugin::<Item>::new(&["item.ron"]))
             .register_asset_reflect::<Item>()
             .add_plugins((WindowSystemsPlugin, WorkbenchPlugin));

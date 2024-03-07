@@ -15,7 +15,9 @@ use bevy_inspector_egui::{
     bevy_egui::EguiContexts,
     egui::{self, Ui},
 };
-use bevy_replicon::{network_event::client_event::FromClient, server::has_authority};
+use bevy_replicon::{
+    core::common_conditions::has_authority, network_event::client_event::FromClient,
+};
 
 use crate::{
     plugins::{network::LocalPlayer, player::Player},
@@ -36,7 +38,7 @@ impl Plugin for WindowSystemsPlugin {
             .add_systems(Update, craft.run_if(in_state(GameState::Game)))
             .add_systems(
                 Update,
-                (add_item_window, add_item_event.run_if(has_authority()))
+                (add_item_window, add_item_event.run_if(has_authority))
                     .run_if(in_state(GameState::Game)),
             )
             .add_systems(
@@ -119,7 +121,7 @@ fn add_item_window(
                             .clone(),
                         stack: add_item_window.stack.clone(),
                     },
-                })
+                });
             }
             if ui.button("Clear Inventory").clicked() {
                 // if let Ok(mut inventory) = player_query.get_single_mut() {
@@ -286,7 +288,7 @@ fn handle_inventory_window(
             ui.horizontal(|ui| {
                 for (inventory, player) in player_query.iter() {
                     ui.vertical(|ui| {
-                        ui.label(format!("{}", player.0));
+                        ui.label(format!("{:?}", player.0));
                         for entity in inventory.map.iter().filter_map(|x| *x) {
                             if let Ok(item) = input_items_query.get(entity) {
                                 show_item(item, ui, true);

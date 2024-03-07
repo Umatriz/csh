@@ -6,7 +6,7 @@ use bevy::{
         schedule::{common_conditions::in_state, IntoSystemConfigs},
         system::{Commands, Query, Res},
     },
-    input::{keyboard::KeyCode, Input},
+    input::{keyboard::KeyCode, ButtonInput},
     math::Vec3,
     render::camera::{Camera, OrthographicProjection},
     time::Time,
@@ -72,7 +72,7 @@ fn spawn_camera(mut commands: Commands) {
 // }
 
 pub fn camera_movement(
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut OrthographicProjection, With<Camera>>,
 ) {
     for mut ortho in query.iter_mut() {
@@ -94,11 +94,11 @@ pub fn camera_movement(
         //     direction -= Vec3::new(0.0, 1.0, 0.0);
         // }
 
-        if keyboard_input.pressed(KeyCode::Z) {
+        if keyboard_input.pressed(KeyCode::KeyZ) {
             ortho.scale += 0.1;
         }
 
-        if keyboard_input.pressed(KeyCode::X) {
+        if keyboard_input.pressed(KeyCode::KeyX) {
             ortho.scale -= 0.1;
         }
 

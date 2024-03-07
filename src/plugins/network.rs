@@ -6,16 +6,16 @@ use std::{
 use bevy::prelude::*;
 
 use bevy_inspector_egui::{bevy_egui::EguiContexts, egui};
-use bevy_replicon::{
+use bevy_replicon::prelude::*;
+use bevy_replicon_renet::{
     renet::{
         transport::{
             ClientAuthentication, NetcodeClientTransport, NetcodeServerTransport,
             ServerAuthentication, ServerConfig,
         },
-        ClientId, ConnectionConfig, RenetClient, RenetServer, ServerEvent,
+        ConnectionConfig, RenetClient, RenetServer,
     },
-    replicon_core::{replication_rules::Replication, NetworkChannels},
-    server::SERVER_ID,
+    RenetChannelsExt, RepliconRenetPlugins,
 };
 
 use crate::{GameState, WindowContext};
@@ -33,7 +33,7 @@ impl Plugin for NetworkPlugin {
             .add_systems(Update, show_menu.run_if(in_state(GameState::Menu)))
             .add_systems(
                 Update,
-                server_event_system.run_if(resource_exists::<RenetServer>()),
+                server_event_system.run_if(resource_exists::<RenetServer>),
             );
     }
 }
@@ -69,7 +69,7 @@ fn show_menu(
     mut commands: Commands,
     mut menu_context: ResMut<MenuContext>,
     mut window_context: ResMut<WindowContext>,
-    network_channels: Res<NetworkChannels>,
+    channels: Res<RepliconChannels>,
     mut game_state: ResMut<NextState<GameState>>,
 ) {
     egui::Window::new("Lobby")
@@ -122,8 +122,8 @@ fn show_menu(
             if ui.button("Play").clicked() {
                 match menu_context.selected {
                     AppKind::Server { port, ip } => {
-                        let server_channels_config = network_channels.get_server_configs();
-                        let client_channels_config = network_channels.get_client_configs();
+                        let server_channels_config = channels.get_server_configs();
+                        let client_channels_config = channels.get_client_configs();
 
                         let server = RenetServer::new(ConnectionConfig {
                             server_channels_config,
@@ -158,25 +158,27 @@ fn show_menu(
                         ));
 
                         commands.spawn(PlayerBundle {
-                            player: Player(SERVER_ID),
+                            player: Player(ClientId::SERVER),
                             replication: Replication,
                             transform: Transform::from_xyz(0.0, 0.0, 0.0),
                             color: PlayerColor(Color::GREEN),
                             ..Default::default()
                         });
 
-                        commands.spawn(CursorBundle {
-                            cursor: Cursor(SERVER_ID),
-                            color: CursorColor(Color::BLACK),
-                            transform: Transform::default(),
-                            replication: Replication,
-                        });
+                        let entity = commands
+                            .spawn(CursorBundle {
+                                cursor: Cursor(ClientId::SERVER),
+                                color: CursorColor(Color::BLACK),
+                                transform: Transform::default(),
+                                replication: Replication,
+                            })
+                            .id();
 
-                        commands.insert_resource(LocalPlayer(SERVER_ID))
+                        commands.insert_resource(LocalPlayer(ClientId::SERVER))
                     }
                     AppKind::Client { ip, port } => {
-                        let server_channels_config = network_channels.get_server_configs();
-                        let client_channels_config = network_channels.get_client_configs();
+                        let server_channels_config = channels.get_server_configs();
+                        let client_channels_config = channels.get_client_configs();
 
                         let client = RenetClient::new(ConnectionConfig {
                             server_channels_config,
@@ -213,7 +215,7 @@ fn show_menu(
                             },
                         ));
 
-                        commands.insert_resource(LocalPlayer(ClientId::from_raw(client_id)));
+                        commands.insert_resource(LocalPlayer(ClientId::new(client_id)));
                     }
                 }
                 game_state.set(GameState::Game)
@@ -225,11 +227,11 @@ fn server_event_system(mut commands: Commands, mut server_event: EventReader<Ser
     for event in server_event.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
-                info!("player: {client_id} Connected");
+                info!("player: {client_id:?} Connected");
                 // Generate pseudo random color from client id.
-                let r = ((client_id.raw() % 23) as f32) / 23.0;
-                let g = ((client_id.raw() % 27) as f32) / 27.0;
-                let b = ((client_id.raw() % 39) as f32) / 39.0;
+                let r = ((client_id.get() % 23) as f32) / 23.0;
+                let g = ((client_id.get() % 27) as f32) / 27.0;
+                let b = ((client_id.get() % 39) as f32) / 39.0;
                 commands.spawn(PlayerBundle {
                     player: Player(*client_id),
                     replication: Replication,
@@ -238,15 +240,17 @@ fn server_event_system(mut commands: Commands, mut server_event: EventReader<Ser
                     ..Default::default()
                 });
 
-                commands.spawn(CursorBundle {
-                    cursor: Cursor(*client_id),
-                    color: CursorColor(Color::rgb(r, g, b)),
-                    transform: Transform::default(),
-                    replication: Replication,
-                });
+                let entity = commands
+                    .spawn(CursorBundle {
+                        cursor: Cursor(*client_id),
+                        color: CursorColor(Color::rgb(r, g, b)),
+                        transform: Transform::default(),
+                        replication: Replication,
+                    })
+                    .id();
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
-                info!("client {client_id} disconnected: {reason}");
+                info!("client {client_id:?} disconnected: {reason}");
             }
         }
     }

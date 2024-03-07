@@ -1,13 +1,13 @@
 use bevy::{
     ecs::{
         component::Component,
-        entity::Entity,
+        entity::{Entity, MapEntities},
         system::{Commands, Query},
     },
     log::{error, info},
     reflect::{std_traits::ReflectDefault, Reflect},
 };
-use bevy_replicon::replicon_core::replication_rules::{MapNetworkEntities, Replication};
+use bevy_replicon::core::replication_rules::Replication;
 use serde::{Deserialize, Serialize};
 
 use super::{Item, ItemBundle, ItemStack, Layout};
@@ -18,14 +18,14 @@ pub struct Inventory {
     pub map: Vec<Option<Entity>>,
 }
 
-impl MapNetworkEntities for Inventory {
-    fn map_entities<T: bevy_replicon::prelude::Mapper>(&mut self, mapper: &mut T) {
+impl MapEntities for Inventory {
+    fn map_entities<M: bevy::prelude::EntityMapper>(&mut self, entity_mapper: &mut M) {
         for (opt, ent) in self
             .map
             .iter_mut()
             .filter_map(|opt| (*opt).map(|ent| (opt, ent)))
         {
-            *opt = Some(mapper.map(ent))
+            *opt = Some(entity_mapper.map_entity(ent))
         }
     }
 }

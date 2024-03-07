@@ -6,20 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.12.1", features = ["serialize"] }
+bevy = { version = "0.13.0", features = ["serialize"] }
 paste = "1.0.14"
 ndarray = "0.15.6"
 clap = { version = "4.4", features = ["derive"] }
 serde = "1.0"
 
-bevy_mod_picking = { version = "0.17.0", features = ["backend_egui"] }
-bevy_asset_loader = { version = "0.19.0", features = ["2d"] }
-bevy-inspector-egui = "0.22.1"
+bevy_xpbd_2d = "0.4.2"
+bevy_mod_picking = { version = "0.18.1", features = ["backend_egui"] }
+bevy_asset_loader = { version = "0.20.0", features = ["2d"] }
+bevy-inspector-egui = "0.23.4"
 bytemuck = "1.14.1"
-bevy_replicon = "0.21.2"
-bevy_common_assets = { version = "0.9.0", features = ["ron"] }
+bevy_replicon = "0.24.1"
+bevy_replicon_renet = "0.1"
+bevy_common_assets = { version = "0.10.0", features = ["ron"], default-features = false }
 ron = "0.8.1"
-thiserror = "1.0"
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!

@@ -2,10 +2,14 @@ use std::num::Saturating;
 
 use bevy::{
     asset::Asset,
-    ecs::{bundle::Bundle, component::Component, entity::Entity, event::Event},
+    ecs::{
+        bundle::Bundle,
+        component::Component,
+        entity::{Entity, MapEntities},
+        event::Event,
+    },
     reflect::{std_traits::ReflectDefault, Reflect},
 };
-use bevy_replicon::replicon_core::replication_rules::MapNetworkEntities;
 use serde::{Deserialize, Serialize};
 
 #[derive(Component, Hash, Clone, PartialEq, Eq, Debug, Reflect, Serialize, Deserialize, Asset)]
@@ -38,22 +42,22 @@ impl ItemBundle {
     }
 }
 
-#[derive(Debug, Deserialize, Event, Serialize)]
+#[derive(Debug, Clone, Event, Deserialize, Serialize)]
 pub struct ItemEvent {
     pub kind: ItemEventKind,
     pub inventory: Option<Entity>,
     pub item: ItemBundle,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum ItemEventKind {
     Add,
     Remove,
 }
 
-impl MapNetworkEntities for ItemEvent {
-    fn map_entities<T: bevy_replicon::prelude::Mapper>(&mut self, mapper: &mut T) {
-        self.inventory = self.inventory.map(|ent| mapper.map(ent));
+impl MapEntities for ItemEvent {
+    fn map_entities<M: bevy::prelude::EntityMapper>(&mut self, entity_mapper: &mut M) {
+        self.inventory = self.inventory.map(|ent| entity_mapper.map_entity(ent));
     }
 }
 
