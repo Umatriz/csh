@@ -4,5 +4,6 @@ pub mod chest;
 pub mod crafting;
 pub mod cursor;
 pub mod enemy;
+pub mod environment;
 pub mod network;
 pub mod player;

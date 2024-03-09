@@ -20,16 +20,14 @@ use bevy_replicon_renet::{
 
 use crate::{GameState, WindowContext};
 
-use super::{
-    cursor::{Cursor, CursorBundle, CursorColor},
-    player::{Player, PlayerBundle, PlayerColor},
-};
+use super::player::{Player, PlayerBundle, PlayerColor};
 
 pub struct NetworkPlugin;
 
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MenuContext>()
+            .add_event::<NetworkLastStep>()
             .add_systems(Update, show_menu.run_if(in_state(GameState::Menu)))
             .add_systems(
                 Update,
@@ -40,6 +38,9 @@ impl Plugin for NetworkPlugin {
 
 #[derive(Resource)]
 pub struct LocalPlayer(pub ClientId);
+
+#[derive(Event, Default)]
+pub struct NetworkLastStep;
 
 const PORT: u16 = 5000;
 const PROTOCOL_ID: u64 = 0;
@@ -71,6 +72,7 @@ fn show_menu(
     mut window_context: ResMut<WindowContext>,
     channels: Res<RepliconChannels>,
     mut game_state: ResMut<NextState<GameState>>,
+    mut event: EventWriter<NetworkLastStep>,
 ) {
     egui::Window::new("Lobby")
         .open(&mut window_context.menu_window)
@@ -157,6 +159,8 @@ fn show_menu(
                             },
                         ));
 
+                        event.send_default();
+
                         commands.spawn(PlayerBundle {
                             player: Player(ClientId::SERVER),
                             replication: Replication,
@@ -165,14 +169,14 @@ fn show_menu(
                             ..Default::default()
                         });
 
-                        let entity = commands
-                            .spawn(CursorBundle {
-                                cursor: Cursor(ClientId::SERVER),
-                                color: CursorColor(Color::BLACK),
-                                transform: Transform::default(),
-                                replication: Replication,
-                            })
-                            .id();
+                        // let entity = commands
+                        //     .spawn(CursorBundle {
+                        //         cursor: Cursor(ClientId::SERVER),
+                        //         color: CursorColor(Color::BLACK),
+                        //         transform: Transform::default(),
+                        //         replication: Replication,
+                        //     })
+                        //     .id();
 
                         commands.insert_resource(LocalPlayer(ClientId::SERVER))
                     }
@@ -240,14 +244,14 @@ fn server_event_system(mut commands: Commands, mut server_event: EventReader<Ser
                     ..Default::default()
                 });
 
-                let entity = commands
-                    .spawn(CursorBundle {
-                        cursor: Cursor(*client_id),
-                        color: CursorColor(Color::rgb(r, g, b)),
-                        transform: Transform::default(),
-                        replication: Replication,
-                    })
-                    .id();
+                // let entity = commands
+                //     .spawn(CursorBundle {
+                //         cursor: Cursor(*client_id),
+                //         color: CursorColor(Color::rgb(r, g, b)),
+                //         transform: Transform::default(),
+                //         replication: Replication,
+                //     })
+                //     .id();
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
                 info!("client {client_id:?} disconnected: {reason}");

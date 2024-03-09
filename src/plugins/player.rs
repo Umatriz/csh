@@ -1,31 +1,46 @@
 use bevy::{
-    app::{Plugin, Update},
-    asset::Handle,
+    app::{Plugin, PreUpdate, Update},
+    asset::{Assets, Handle},
     core::Name,
     ecs::{
         bundle::Bundle,
         component::Component,
-        event::Event,
-        query::With,
+        entity::Entity,
+        event::{Event, EventReader, EventWriter},
+        query::{Added, With},
         schedule::{common_conditions::in_state, IntoSystemConfigs, NextState, OnEnter},
         system::{Commands, Query, Res, ResMut, Resource},
+        world::EntityWorldMut,
     },
     input::{keyboard::KeyCode, ButtonInput},
-    math::{Vec2, Vec3},
+    log::info,
+    math::{
+        primitives::{Cuboid, Plane3d},
+        Vec2, Vec3,
+    },
+    pbr::{PbrBundle, StandardMaterial},
     prelude::{Deref, DerefMut},
     reflect::{std_traits::ReflectDefault, Reflect},
     render::{
         color::Color,
+        mesh::{shape, Mesh},
         texture::Image,
-        view::{InheritedVisibility, ViewVisibility, Visibility},
+        view::{InheritedVisibility, ViewVisibility, Visibility, VisibilityBundle},
     },
     sprite::{Sprite, SpriteBundle, SpriteSheetBundle, TextureAtlas},
     time::{Time, Timer, TimerMode},
     transform::components::{GlobalTransform, Transform},
 };
 use bevy_asset_loader::asset_collection::AssetCollection;
-use bevy_replicon::core::replication_rules::Replication;
-use bevy_replicon::prelude::ClientId;
+use bevy_replicon::{
+    client::ClientSet,
+    core::replication_rules::{AppReplicationExt, Replication},
+    network_event::client_event::{ClientEventAppExt, FromClient},
+};
+use bevy_replicon::{
+    core::{common_conditions::has_authority, replicon_channels::ChannelKind},
+    prelude::ClientId,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::GameState;
@@ -36,38 +51,22 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        // app.add_systems(OnEnter(GameState::Game), spawn_player)
-        //     .add_systems(Update, player_movement.run_if(in_state(GameState::Game)));
+        app.add_systems(PreUpdate, player_init_system.after(ClientSet::Receive))
+            .replicate::<PlayerColor>()
+            .replicate::<Player>()
+            .add_client_event::<MoveDirection>(ChannelKind::Ordered)
+            .add_systems(
+                Update,
+                (
+                    movement_system.run_if(has_authority), // Runs only on the server or a single player.
+                    input_system,
+                ),
+            );
     }
 }
 
 #[derive(AssetCollection, Resource)]
-pub struct PlayerCollection {
-    // #[asset(texture_atlas(
-    //     tile_size_x = 12.,
-    //     tile_size_y = 18.,
-    //     columns = 4,
-    //     rows = 4,
-    //     padding_x = 0.,
-    //     padding_y = 0.,
-    //     offset_x = 0.,
-    //     offset_y = 0.
-    // ))]
-    // #[asset(path = "CharacterSpriteSheet.png")]
-    // pub atlas: Handle<TextureAtlas>,
-    // #[asset(texture_atlas(
-    //     tile_size_x = 16.,
-    //     tile_size_y = 24.,
-    //     columns = 8,
-    //     rows = 4,
-    //     padding_x = 0.,
-    //     padding_y = 0.,
-    //     offset_x = 0.,
-    //     offset_y = 0.
-    // ))]
-    // #[asset(path = "Small-8-Direction-Characters_by_AxulArt.png")]
-    // pub atlas: Handle<TextureAtlas>,
-}
+pub struct PlayerCollection {}
 
 #[derive(Component, Serialize, Deserialize, PartialEq)]
 pub struct Player(pub ClientId);
@@ -78,11 +77,8 @@ impl Default for Player {
     }
 }
 
-#[derive(Component, Deserialize, Serialize, Deref, DerefMut)]
-pub struct PlayerPosition(pub Vec2);
-
 #[derive(Debug, Default, Deserialize, Event, Serialize)]
-pub struct MoveDirection(pub Vec2);
+pub struct MoveDirection(pub Vec3);
 
 #[derive(Component, Deserialize, Serialize, Default)]
 pub struct PlayerColor(pub Color);
@@ -99,72 +95,63 @@ pub struct PlayerBundle {
 #[derive(Component, Default)]
 pub struct PlayerProperties {}
 
-fn spawn_player(
+fn player_init_system(
     mut commands: Commands,
-    texture: Res<PlayerCollection>,
-    // mut game_state: ResMut<NextState<GameState>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut standard_material: ResMut<Assets<StandardMaterial>>,
+    spawned_players: Query<(Entity, &PlayerColor), Added<Player>>,
 ) {
-    // let animation_indices = AnimationIndices {
-    //     first: 0,
-    //     last: 1,
-    //     current: 0,
-    // };
-    // commands
-    //     .spawn(PlayerBundle::default())
-    //     .insert(Name::new("Player"))
-    //     .insert(SpriteSheetBundle {
-    //         texture_atlas: texture.atlas.clone(),
-    //         sprite: TextureAtlasSprite::new(0),
-    //         transform: Transform::from_scale(Vec3::splat(1.0)),
-    //         ..Default::default()
-    //     })
-    // .insert(animation_indices)
-    // .insert(AnimationSets {
-    //     array: [
-    //         [8, 24],
-    //         [9, 25],
-    //         [10, 26],
-    //         [11, 27],
-    //         [12, 28],
-    //         [13, 29],
-    //         [14, 30],
-    //         [15, 31],
-    //     ],
-    // })
-    // .insert(AnimationTimer(Timer::from_seconds(
-    //     0.4,
-    //     TimerMode::Repeating,
-    // )))
-
-    // game_state.set(GameState::Game);
+    for (entity, color) in &spawned_players {
+        info!("PLAYER INIT");
+        let mesh_handle = meshes.add(Cuboid::from_size(Vec3::ONE / 2.0));
+        let standard_material_handle = standard_material.add(StandardMaterial {
+            base_color: color.0,
+            ..Default::default()
+        });
+        commands.entity(entity).insert((
+            GlobalTransform::default(),
+            VisibilityBundle::default(),
+            mesh_handle,
+            standard_material_handle,
+        ));
+    }
 }
 
-// fn player_movement(
-//     mut player_q: Query<&mut Transform, With<Player>>,
-//     keys: Res<ButtonInput<KeyCode>>,
-//     time: Res<Time>,
-// ) {
-//     let mut direction = Vec2::ZERO;
-//     if keys.any_pressed([KeyCode::Up, KeyCode::W]) {
-//         direction.y += 1.;
-//     }
-//     if keys.any_pressed([KeyCode::Down, KeyCode::S]) {
-//         direction.y -= 1.;
-//     }
-//     if keys.any_pressed([KeyCode::Right, KeyCode::D]) {
-//         direction.x += 1.;
-//     }
-//     if keys.any_pressed([KeyCode::Left, KeyCode::A]) {
-//         direction.x -= 1.;
-//     }
-//     if direction == Vec2::ZERO {
-//         return;
-//     }
+/// Reads player inputs and sends [`MoveCommandEvents`]
+fn input_system(mut move_events: EventWriter<MoveDirection>, input: Res<ButtonInput<KeyCode>>) {
+    let mut direction = Vec3::ZERO;
+    if input.pressed(KeyCode::ArrowRight) {
+        direction.x += 1.0;
+    }
+    if input.pressed(KeyCode::ArrowLeft) {
+        direction.x -= 1.0;
+    }
+    if input.pressed(KeyCode::ArrowUp) {
+        direction.z += 1.0;
+    }
+    if input.pressed(KeyCode::ArrowDown) {
+        direction.z -= 1.0;
+    }
+    if direction != Vec3::ZERO {
+        move_events.send(MoveDirection(direction.normalize_or_zero()));
+    }
+}
 
-//     let move_speed = 37.;
-//     let move_delta = direction * move_speed * time.delta_seconds();
-
-//     for mut player_transform in player_q.iter_mut() {
-//         player_transform.translation += move_delta.extend(0.);
-//     }
-// }
+/// Mutates [`PlayerPosition`] based on [`MoveCommandEvents`].
+///
+/// Fast-paced games usually you don't want to wait until server send a position back because of the latency.
+/// But this example just demonstrates simple replication concept.
+fn movement_system(
+    time: Res<Time>,
+    mut move_events: EventReader<FromClient<MoveDirection>>,
+    mut players: Query<(&Player, &mut Transform)>,
+) {
+    const MOVE_SPEED: f32 = 3.0;
+    for FromClient { client_id, event } in move_events.read() {
+        for (player, mut position) in &mut players {
+            if *client_id == player.0 {
+                position.translation += event.0 * time.delta_seconds() * MOVE_SPEED;
+            }
+        }
+    }
+}

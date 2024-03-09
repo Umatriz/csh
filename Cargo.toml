@@ -12,7 +12,7 @@ ndarray = "0.15.6"
 clap = { version = "4.4", features = ["derive"] }
 serde = "1.0"
 
-bevy_xpbd_2d = "0.4.2"
+bevy_xpbd_3d = "0.4.2"
 bevy_mod_picking = { version = "0.18.1", features = ["backend_egui"] }
 bevy_asset_loader = { version = "0.20.0", features = ["2d"] }
 bevy-inspector-egui = "0.23.4"
