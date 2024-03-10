@@ -27,7 +27,7 @@ pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MenuContext>()
-            .add_event::<NetworkLastStep>()
+            .add_event::<NetworkSpawnStep>()
             .add_systems(Update, show_menu.run_if(in_state(GameState::Menu)))
             .add_systems(
                 Update,
@@ -39,8 +39,8 @@ impl Plugin for NetworkPlugin {
 #[derive(Resource)]
 pub struct LocalPlayer(pub ClientId);
 
-#[derive(Event, Default)]
-pub struct NetworkLastStep;
+#[derive(Event)]
+pub struct NetworkSpawnStep(pub ClientId);
 
 const PORT: u16 = 5000;
 const PROTOCOL_ID: u64 = 0;
@@ -72,7 +72,7 @@ fn show_menu(
     mut window_context: ResMut<WindowContext>,
     channels: Res<RepliconChannels>,
     mut game_state: ResMut<NextState<GameState>>,
-    mut event: EventWriter<NetworkLastStep>,
+    mut event: EventWriter<NetworkSpawnStep>,
 ) {
     egui::Window::new("Lobby")
         .open(&mut window_context.menu_window)
@@ -159,7 +159,7 @@ fn show_menu(
                             },
                         ));
 
-                        event.send_default();
+                        event.send(NetworkSpawnStep(ClientId::SERVER));
 
                         commands.spawn(PlayerBundle {
                             player: Player(ClientId::SERVER),
@@ -236,6 +236,7 @@ fn server_event_system(mut commands: Commands, mut server_event: EventReader<Ser
                 let r = ((client_id.get() % 23) as f32) / 23.0;
                 let g = ((client_id.get() % 27) as f32) / 27.0;
                 let b = ((client_id.get() % 39) as f32) / 39.0;
+
                 commands.spawn(PlayerBundle {
                     player: Player(*client_id),
                     replication: Replication,

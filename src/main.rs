@@ -13,6 +13,7 @@ use bevy_replicon::core::common_conditions::has_authority;
 use bevy_replicon::core::replication_rules::AppReplicationExt;
 use bevy_replicon::core::replicon_channels::ChannelKind;
 use bevy_replicon::network_event::client_event::{ClientEventAppExt, FromClient};
+use bevy_replicon::server::{ServerPlugin, TickPolicy};
 use bevy_replicon::RepliconPlugins;
 use bevy_replicon_renet::RepliconRenetPlugins;
 use bevy_xpbd_3d::plugins::{PhysicsDebugPlugin, PhysicsPlugins};
@@ -41,7 +42,13 @@ fn main() {
         .init_resource::<WindowContext>()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()))
-        .add_plugins((RepliconPlugins, RepliconRenetPlugins))
+        .add_plugins((
+            RepliconPlugins.set(ServerPlugin {
+                tick_policy: TickPolicy::MaxTickRate(60),
+                ..Default::default()
+            }),
+            RepliconRenetPlugins,
+        ))
         .add_plugins((EguiPlugin, WorldInspectorPlugin::new()))
         .add_plugins(DefaultPickingPlugins)
         .add_plugins(ResourceInspectorPlugin::<WindowContext>::default())

@@ -120,16 +120,16 @@ fn player_init_system(
 /// Reads player inputs and sends [`MoveCommandEvents`]
 fn input_system(mut move_events: EventWriter<MoveDirection>, input: Res<ButtonInput<KeyCode>>) {
     let mut direction = Vec3::ZERO;
-    if input.pressed(KeyCode::ArrowRight) {
+    if input.pressed(KeyCode::KeyD) {
         direction.x += 1.0;
     }
-    if input.pressed(KeyCode::ArrowLeft) {
+    if input.pressed(KeyCode::KeyA) {
         direction.x -= 1.0;
     }
-    if input.pressed(KeyCode::ArrowUp) {
+    if input.pressed(KeyCode::KeyW) {
         direction.z += 1.0;
     }
-    if input.pressed(KeyCode::ArrowDown) {
+    if input.pressed(KeyCode::KeyS) {
         direction.z -= 1.0;
     }
     if direction != Vec3::ZERO {
