@@ -7,9 +7,13 @@ use bevy::{
     },
     math::{primitives::Plane3d, Vec3},
     pbr::{PbrBundle, StandardMaterial},
-    render::{color::Color, mesh::Mesh},
+    render::{
+        color::Color,
+        mesh::{Mesh, Meshable},
+    },
     transform::components::Transform,
 };
+use bevy_xpbd_3d::{components::RigidBody, plugins::collision::Collider};
 
 use crate::GameState;
 
@@ -22,13 +26,18 @@ fn spawn_floor(
     mut meshes: ResMut<Assets<Mesh>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Plane3d::new(Vec3::Y)),
-        material: standard_materials.add(StandardMaterial {
-            base_color: Color::GRAY,
+    let mesh = Plane3d::new(Vec3::Y).mesh().size(50.0, 50.0).build();
+    commands.spawn((
+        RigidBody::Static,
+        Collider::convex_hull_from_mesh(&mesh).unwrap(),
+        PbrBundle {
+            mesh: meshes.add(mesh),
+            material: standard_materials.add(StandardMaterial {
+                base_color: Color::GRAY,
+                ..Default::default()
+            }),
+            transform: Transform::default().with_scale(Vec3::ONE * 5.0),
             ..Default::default()
-        }),
-        transform: Transform::default().with_scale(Vec3::ONE * 5.0),
-        ..Default::default()
-    });
+        },
+    ));
 }

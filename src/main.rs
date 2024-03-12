@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use bevy::prelude::*;
+use bevy::winit::{UpdateMode, WinitSettings};
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::{
     AssetInspectorPlugin, ResourceInspectorPlugin, WorldInspectorPlugin,
@@ -16,6 +17,7 @@ use bevy_replicon::network_event::client_event::{ClientEventAppExt, FromClient};
 use bevy_replicon::server::{ServerPlugin, TickPolicy};
 use bevy_replicon::RepliconPlugins;
 use bevy_replicon_renet::RepliconRenetPlugins;
+use bevy_replicon_snap::SnapshotInterpolationPlugin;
 use bevy_xpbd_3d::plugins::{PhysicsDebugPlugin, PhysicsPlugins};
 use plugins::assets::AssetsLoadingPlugin;
 use plugins::crafting::logic::Workbench;
@@ -36,18 +38,27 @@ pub mod utils;
 
 pub use core::stringify;
 
+const MAX_TICK_RATE: u16 = 60;
+
 fn main() {
     App::new()
         .register_type::<WindowContext>()
         .init_resource::<WindowContext>()
+        .insert_resource(WinitSettings {
+            focused_mode: UpdateMode::Continuous,
+            unfocused_mode: UpdateMode::Continuous,
+        })
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()))
         .add_plugins((
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::MaxTickRate(60),
+                tick_policy: TickPolicy::MaxTickRate(MAX_TICK_RATE),
                 ..Default::default()
             }),
             RepliconRenetPlugins,
+            SnapshotInterpolationPlugin {
+                max_tick_rate: MAX_TICK_RATE,
+            },
         ))
         .add_plugins((EguiPlugin, WorldInspectorPlugin::new()))
         .add_plugins(DefaultPickingPlugins)

@@ -1247,6 +1247,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_replicon_snap"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ad71b36062906cf3c6b918023d3254b396720e89897a3959a4402bd7317c257"
+dependencies = [
+ "bevy",
+ "bevy_replicon",
+ "bevy_replicon_renet",
+ "bevy_replicon_snap_macros",
+ "serde",
+]
+
+[[package]]
+name = "bevy_replicon_snap_macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b7f2ca7e3ca55177621bf8e19648ca7639b6cd9d31c6ec9a541860b663b3bac"
+dependencies = [
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "bevy_scene"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2108,6 +2131,7 @@ dependencies = [
  "bevy_mod_picking",
  "bevy_replicon",
  "bevy_replicon_renet",
+ "bevy_replicon_snap",
  "bevy_xpbd_3d",
  "bytemuck",
  "clap",

@@ -21,6 +21,7 @@ bevy_replicon = "0.24.1"
 bevy_replicon_renet = "0.1"
 bevy_common_assets = { version = "0.10.0", features = ["ron"], default-features = false }
 ron = "0.8.1"
+bevy_replicon_snap = "0.2.0"
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!

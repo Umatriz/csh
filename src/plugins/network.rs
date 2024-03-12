@@ -164,7 +164,7 @@ fn show_menu(
                         commands.spawn(PlayerBundle {
                             player: Player(ClientId::SERVER),
                             replication: Replication,
-                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                            transform: Transform::from_xyz(0.0, 40.0, 0.0),
                             color: PlayerColor(Color::GREEN),
                             ..Default::default()
                         });
@@ -241,7 +241,7 @@ fn server_event_system(mut commands: Commands, mut server_event: EventReader<Ser
                     player: Player(*client_id),
                     replication: Replication,
                     color: PlayerColor(Color::rgb(r, g, b)),
-                    transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                    transform: Transform::from_xyz(0.0, 40.0, 0.0),
                     ..Default::default()
                 });
 

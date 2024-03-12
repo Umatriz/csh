@@ -41,6 +41,7 @@ use bevy_replicon::{
     core::{common_conditions::has_authority, replicon_channels::ChannelKind},
     prelude::ClientId,
 };
+use bevy_xpbd_3d::{components::RigidBody, plugins::collision::Collider};
 use serde::{Deserialize, Serialize};
 
 use crate::GameState;
@@ -97,22 +98,24 @@ pub struct PlayerProperties {}
 
 fn player_init_system(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut standard_material: ResMut<Assets<StandardMaterial>>,
+    // mut meshes: ResMut<Assets<Mesh>>,
+    // mut standard_material: ResMut<Assets<StandardMaterial>>,
     spawned_players: Query<(Entity, &PlayerColor), Added<Player>>,
 ) {
     for (entity, color) in &spawned_players {
         info!("PLAYER INIT");
-        let mesh_handle = meshes.add(Cuboid::from_size(Vec3::ONE / 2.0));
-        let standard_material_handle = standard_material.add(StandardMaterial {
-            base_color: color.0,
-            ..Default::default()
-        });
+        // let mesh_handle = meshes.add(Cuboid::from_size(Vec3::ONE / 2.0));
+        // let standard_material_handle = standard_material.add(StandardMaterial {
+        //     base_color: color.0,
+        //     ..Default::default()
+        // });
         commands.entity(entity).insert((
+            RigidBody::Dynamic,
+            Collider::capsule(5.0, 3.0),
             GlobalTransform::default(),
             VisibilityBundle::default(),
-            mesh_handle,
-            standard_material_handle,
+            // mesh_handle,
+            // standard_material_handle,
         ));
     }
 }
