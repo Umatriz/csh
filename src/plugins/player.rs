@@ -7,23 +7,23 @@ use bevy::{
         component::Component,
         entity::Entity,
         event::{Event, EventReader, EventWriter},
-        query::{Added, With},
+        query::{Added, With, Without},
         schedule::{common_conditions::in_state, IntoSystemConfigs, NextState, OnEnter},
         system::{Commands, Query, Res, ResMut, Resource},
         world::EntityWorldMut,
     },
     input::{keyboard::KeyCode, ButtonInput},
-    log::info,
+    log::{error, info},
     math::{
-        primitives::{Cuboid, Plane3d},
-        Vec2, Vec3,
+        primitives::{Capsule3d, Cuboid, Direction3d, Plane3d, Rectangle},
+        Quat, Vec2, Vec3,
     },
     pbr::{PbrBundle, StandardMaterial},
     prelude::{Deref, DerefMut},
     reflect::{std_traits::ReflectDefault, Reflect},
     render::{
         color::Color,
-        mesh::{shape, Mesh},
+        mesh::{shape, Mesh, Meshable},
         texture::Image,
         view::{InheritedVisibility, ViewVisibility, Visibility, VisibilityBundle},
     },
@@ -33,7 +33,7 @@ use bevy::{
 };
 use bevy_asset_loader::asset_collection::AssetCollection;
 use bevy_replicon::{
-    client::ClientSet,
+    client::{replicon_client::RepliconClient, ClientSet},
     core::replication_rules::{AppReplicationExt, Replication},
     network_event::client_event::{ClientEventAppExt, FromClient},
 };
@@ -41,28 +41,38 @@ use bevy_replicon::{
     core::{common_conditions::has_authority, replicon_channels::ChannelKind},
     prelude::ClientId,
 };
-use bevy_xpbd_3d::{components::RigidBody, plugins::collision::Collider};
+use bevy_xpbd_3d::{
+    components::{LinearVelocity, RigidBody},
+    plugins::{
+        collision::Collider,
+        spatial_query::{RayCaster, RayHits},
+    },
+};
 use serde::{Deserialize, Serialize};
 
 use crate::GameState;
 
-use super::crafting::logic::Inventory;
+use super::{camera::FPSCamera, crafting::logic::Inventory, network::LocalPlayerId};
 
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(PreUpdate, player_init_system.after(ClientSet::Receive))
-            .replicate::<PlayerColor>()
-            .replicate::<Player>()
-            .add_client_event::<MoveDirection>(ChannelKind::Ordered)
-            .add_systems(
-                Update,
-                (
-                    movement_system.run_if(has_authority), // Runs only on the server or a single player.
-                    input_system,
-                ),
-            );
+        app.add_systems(
+            PreUpdate,
+            (player_init_system, init_local_player).after(ClientSet::Receive),
+        )
+        .replicate::<PlayerColor>()
+        .replicate::<Player>()
+        .add_client_event::<MoveDirection>(ChannelKind::Ordered)
+        .add_systems(
+            Update,
+            (
+                (movement_system, handle_players_controls).run_if(has_authority), // Runs only on the server or a single player.
+                // player_rotation,
+                input_system,
+            ),
+        );
     }
 }
 
@@ -98,42 +108,89 @@ pub struct PlayerProperties {}
 
 fn player_init_system(
     mut commands: Commands,
-    // mut meshes: ResMut<Assets<Mesh>>,
-    // mut standard_material: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut standard_material: ResMut<Assets<StandardMaterial>>,
     spawned_players: Query<(Entity, &PlayerColor), Added<Player>>,
 ) {
     for (entity, color) in &spawned_players {
         info!("PLAYER INIT");
-        // let mesh_handle = meshes.add(Cuboid::from_size(Vec3::ONE / 2.0));
-        // let standard_material_handle = standard_material.add(StandardMaterial {
-        //     base_color: color.0,
-        //     ..Default::default()
-        // });
+        let mesh_handle = meshes.add(Capsule3d::new(0.4, 1.0).mesh());
+        let standard_material_handle = standard_material.add(StandardMaterial {
+            base_color: color.0,
+            ..Default::default()
+        });
         commands.entity(entity).insert((
-            RigidBody::Dynamic,
-            Collider::capsule(5.0, 3.0),
+            RigidBody::Kinematic,
+            Collider::capsule(1.0, 0.4),
             GlobalTransform::default(),
             VisibilityBundle::default(),
-            // mesh_handle,
-            // standard_material_handle,
+            RayCaster::new(Vec3::ZERO, Direction3d::NEG_Y),
+            mesh_handle,
+            standard_material_handle,
         ));
     }
 }
 
+#[derive(Component)]
+pub struct LocalPLayer;
+
+fn init_local_player(
+    mut commands: Commands,
+    players: Query<(Entity, &Player)>,
+    local_player: Option<Res<LocalPlayerId>>,
+) {
+    let Some(local_player) = local_player else {
+        return;
+    };
+
+    for (entity, player) in players.iter() {
+        if player.0 == local_player.0 {
+            commands.entity(entity).insert(LocalPLayer);
+        }
+    }
+}
+
+// fn player_rotation(
+//     mut players: Query<&mut Transform, With<LocalPLayer>>,
+//     camera: Query<&Transform, (With<FPSCamera>, Without<LocalPLayer>)>,
+// ) {
+//     let Ok(mut player_transform) = players.get_single_mut() else {
+//         error!("More than one `LocalPlayer` found!");
+//         return;
+//     };
+
+//     let Ok(camera_transform) = camera.get_single() else {
+//         error!("More than one `FPSCamera` found!");
+//         return;
+//     };
+
+//     let val = camera_transform.rotation;
+
+//     player_transform.rotation = val;
+// }
+
 /// Reads player inputs and sends [`MoveCommandEvents`]
-fn input_system(mut move_events: EventWriter<MoveDirection>, input: Res<ButtonInput<KeyCode>>) {
+fn input_system(
+    mut move_events: EventWriter<MoveDirection>,
+    input: Res<ButtonInput<KeyCode>>,
+    player: Query<&Transform, With<LocalPLayer>>,
+) {
+    let Ok(player_transform) = player.get_single() else {
+        return;
+    };
+
     let mut direction = Vec3::ZERO;
     if input.pressed(KeyCode::KeyD) {
-        direction.x += 1.0;
+        direction += *player_transform.right();
     }
     if input.pressed(KeyCode::KeyA) {
-        direction.x -= 1.0;
+        direction += *player_transform.left();
     }
     if input.pressed(KeyCode::KeyW) {
-        direction.z += 1.0;
+        direction += *player_transform.forward();
     }
     if input.pressed(KeyCode::KeyS) {
-        direction.z -= 1.0;
+        direction += *player_transform.back();
     }
     if direction != Vec3::ZERO {
         move_events.send(MoveDirection(direction.normalize_or_zero()));
@@ -151,10 +208,25 @@ fn movement_system(
 ) {
     const MOVE_SPEED: f32 = 3.0;
     for FromClient { client_id, event } in move_events.read() {
-        for (player, mut position) in &mut players {
+        for (player, mut transform) in &mut players {
             if *client_id == player.0 {
-                position.translation += event.0 * time.delta_seconds() * MOVE_SPEED;
+                transform.translation += event.0 * time.delta_seconds() * MOVE_SPEED;
             }
+        }
+    }
+}
+
+fn handle_players_controls(
+    mut players: Query<(&RayCaster, &RayHits, &mut LinearVelocity, &Transform), With<Player>>,
+) {
+    for (ray, hits, mut velocity, transform) in players.iter_mut() {
+        for hit in hits.iter() {
+            println!(
+                "Hit entity {:?} at {} with normal {}",
+                hit.entity,
+                ray.origin + *ray.direction * hit.time_of_impact,
+                hit.normal,
+            );
         }
     }
 }

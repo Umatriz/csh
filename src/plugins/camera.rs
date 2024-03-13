@@ -5,7 +5,7 @@ use bevy::{
     ecs::{
         component::Component,
         event::EventReader,
-        query::With,
+        query::{With, Without},
         schedule::{common_conditions::in_state, IntoSystemConfigs, OnEnter},
         system::{Commands, Query, Res},
     },
@@ -29,7 +29,10 @@ use bevy_xpbd_3d::math::PI;
 
 use crate::GameState;
 
-use super::{network::LocalPlayer, player::Player};
+use super::{
+    network::LocalPlayerId,
+    player::{LocalPLayer, Player},
+};
 
 pub struct CameraPlugin;
 
@@ -110,7 +113,7 @@ fn spawn_camera(mut commands: Commands) {
 fn camera_following(
     mut camera: Query<(&mut Transform, &FPSCamera)>,
     players: Query<(&GlobalTransform, &Player)>,
-    local_player: Res<LocalPlayer>,
+    local_player: Res<LocalPlayerId>,
 ) {
     if let Ok((mut camera_transform, camera)) = camera.get_single_mut() {
         for (player_transform, player) in players.iter() {
@@ -120,7 +123,7 @@ fn camera_following(
                         + player_transform.back()
                         + camera.side_view_vec
                 } else {
-                    camera_transform.translation = player_transform.translation() + Vec3::Y * 2.0;
+                    camera_transform.translation = player_transform.translation() + Vec3::Y;
                 }
             }
         }
@@ -129,6 +132,7 @@ fn camera_following(
 
 fn camera_movement(
     mut camera: Query<(&mut Transform, &mut FPSCamera)>,
+    mut player: Query<&mut Transform, (With<LocalPLayer>, Without<FPSCamera>)>,
     mut motion: EventReader<MouseMotion>,
 ) {
     let Ok((mut camera_transform, mut camera)) = camera.get_single_mut() else {
@@ -143,9 +147,11 @@ fn camera_movement(
             camera.rotation.x = f32::clamp(camera.rotation.x, -PI / 2.0, PI / 2.0);
         }
 
-        let x_quat = Quat::from_axis_angle(Vec3::Y, camera.rotation.y);
+        let y_quat = Quat::from_axis_angle(Vec3::Y, camera.rotation.y);
 
-        let y_quat = Quat::from_axis_angle(Vec3::X, camera.rotation.x);
+        let x_quat = Quat::from_axis_angle(Vec3::X, camera.rotation.x);
+
+        player.get_single_mut().unwrap().rotation = y_quat;
 
         camera_transform.rotation = x_quat * y_quat;
     }

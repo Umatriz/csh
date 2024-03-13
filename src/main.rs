@@ -44,6 +44,7 @@ fn main() {
     App::new()
         .register_type::<WindowContext>()
         .init_resource::<WindowContext>()
+        // TODO: Remove `WinitSettings`
         .insert_resource(WinitSettings {
             focused_mode: UpdateMode::Continuous,
             unfocused_mode: UpdateMode::Continuous,

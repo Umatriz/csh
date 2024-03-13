@@ -37,7 +37,7 @@ impl Plugin for NetworkPlugin {
 }
 
 #[derive(Resource)]
-pub struct LocalPlayer(pub ClientId);
+pub struct LocalPlayerId(pub ClientId);
 
 #[derive(Event)]
 pub struct NetworkSpawnStep(pub ClientId);
@@ -178,7 +178,7 @@ fn show_menu(
                         //     })
                         //     .id();
 
-                        commands.insert_resource(LocalPlayer(ClientId::SERVER))
+                        commands.insert_resource(LocalPlayerId(ClientId::SERVER))
                     }
                     AppKind::Client { ip, port } => {
                         let server_channels_config = channels.get_server_configs();
@@ -219,7 +219,7 @@ fn show_menu(
                             },
                         ));
 
-                        commands.insert_resource(LocalPlayer(ClientId::new(client_id)));
+                        commands.insert_resource(LocalPlayerId(ClientId::new(client_id)));
                     }
                 }
                 game_state.set(GameState::Game)

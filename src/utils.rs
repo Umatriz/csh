@@ -43,9 +43,3 @@ pub fn color_lerp_linear(color0: Color, color1: Color, t: f32) -> Color {
 pub fn squared_distance(point1: Vec3, point2: Vec3) -> f32 {
     (point2.x - point1.x).powi(2) + (point2.y - point1.y).powi(2) + (point2.z - point1.z).powi(2)
 }
-
-#[test]
-fn feature() {
-    let d = squared_distance(Vec3::ZERO, dbg!(Vec3::ONE * 3.0));
-    dbg!(d);
-}

@@ -2,13 +2,15 @@ use bevy::{
     app::{Plugin, Update},
     asset::{Assets, Handle},
     ecs::{
+        entity::Entity,
         event::{Event, EventReader, EventWriter},
         query::With,
         reflect::AppTypeRegistry,
         schedule::{common_conditions::in_state, IntoSystemConfigs},
-        system::{Commands, Query, Res, ResMut, Resource},
+        system::{Commands, Query, Res, ResMut, Resource, SystemParam},
     },
     log::{error, warn},
+    window::PrimaryWindow,
 };
 use bevy_asset_loader::asset_collection::AssetCollection;
 use bevy_inspector_egui::{
@@ -20,7 +22,7 @@ use bevy_replicon::{
 };
 
 use crate::{
-    plugins::{network::LocalPlayer, player::Player},
+    plugins::{network::LocalPlayerId, player::Player},
     GameState, WindowContext,
 };
 
@@ -236,7 +238,7 @@ fn handle_workbench_window(
     mut craft_event_message: EventWriter<CraftMessage>,
     player_query: Query<(&Inventory, &Player)>,
     items_query: Query<(&Item, &ItemStack)>,
-    local_player: Option<Res<LocalPlayer>>,
+    local_player: Option<Res<LocalPlayerId>>,
 ) {
     // egui::Window::new(crafts_map.name())
     //     .open(&mut workbench_window_state.workbench_window)
@@ -299,4 +301,19 @@ fn handle_inventory_window(
                 }
             });
         });
+}
+
+#[derive(SystemParam)]
+pub struct NoPanicEguiContexts<'w, 's> {
+    pub primary_window: Query<'w, 's, Entity, With<PrimaryWindow>>,
+    pub contexts: EguiContexts<'w, 's>,
+}
+
+impl<'w, 's> NoPanicEguiContexts<'w, 's> {
+    pub fn try_ctx_mut(&mut self) -> Option<&mut egui::Context> {
+        self.primary_window
+            .get_single()
+            .ok()
+            .and_then(|entity| self.contexts.try_ctx_for_window_mut(entity))
+    }
 }
