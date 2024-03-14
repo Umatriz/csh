@@ -8,7 +8,10 @@ use bevy::{
         entity::Entity,
         event::{Event, EventReader, EventWriter},
         query::{Added, With, Without},
-        schedule::{common_conditions::in_state, IntoSystemConfigs, NextState, OnEnter},
+        schedule::{
+            common_conditions::{in_state, not},
+            IntoSystemConfigs, NextState, OnEnter,
+        },
         system::{Commands, Query, Res, ResMut, Resource},
         world::EntityWorldMut,
     },
@@ -52,7 +55,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::GameState;
 
-use super::{camera::FPSCamera, crafting::logic::Inventory, network::LocalPlayerId};
+use super::{
+    camera::{fly_view, FPSCamera},
+    crafting::logic::Inventory,
+    network::LocalPlayerId,
+};
 
 pub struct PlayerPlugin;
 
@@ -70,7 +77,7 @@ impl Plugin for PlayerPlugin {
             (
                 (movement_system, handle_players_controls).run_if(has_authority), // Runs only on the server or a single player.
                 // player_rotation,
-                input_system,
+                input_system.run_if(not(fly_view)),
             ),
         );
     }
