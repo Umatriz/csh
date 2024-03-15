@@ -1,42 +1,7 @@
-use bevy::{
-    app::{Plugin, PreUpdate, Update},
-    asset::{Assets, Handle},
-    core::Name,
-    ecs::{
-        bundle::Bundle,
-        component::Component,
-        entity::Entity,
-        event::{Event, EventReader, EventWriter},
-        query::{Added, With, Without},
-        schedule::{
-            common_conditions::{in_state, not},
-            IntoSystemConfigs, NextState, OnEnter,
-        },
-        system::{Commands, Query, Res, ResMut, Resource},
-        world::EntityWorldMut,
-    },
-    input::{keyboard::KeyCode, ButtonInput},
-    log::{error, info},
-    math::{
-        primitives::{Capsule3d, Cuboid, Direction3d, Plane3d, Rectangle},
-        Quat, Vec2, Vec3,
-    },
-    pbr::{PbrBundle, StandardMaterial},
-    prelude::{Deref, DerefMut},
-    reflect::{std_traits::ReflectDefault, Reflect},
-    render::{
-        color::Color,
-        mesh::{shape, Mesh, Meshable},
-        texture::Image,
-        view::{InheritedVisibility, ViewVisibility, Visibility, VisibilityBundle},
-    },
-    sprite::{Sprite, SpriteBundle, SpriteSheetBundle, TextureAtlas},
-    time::{Time, Timer, TimerMode},
-    transform::components::{GlobalTransform, Transform},
-};
+use bevy::{ecs::query::Has, prelude::*};
 use bevy_asset_loader::asset_collection::AssetCollection;
 use bevy_replicon::{
-    client::{replicon_client::RepliconClient, ClientSet},
+    client::ClientSet,
     core::replication_rules::{AppReplicationExt, Replication},
     network_event::client_event::{ClientEventAppExt, FromClient},
 };
@@ -45,11 +10,13 @@ use bevy_replicon::{
     prelude::ClientId,
 };
 use bevy_xpbd_3d::{
-    components::{LinearVelocity, RigidBody},
+    components::{LinearVelocity, Position, RigidBody, Rotation},
+    math::{AdjustPrecision, Quaternion, Scalar, Vector, PI},
     plugins::{
-        collision::Collider,
-        spatial_query::{RayCaster, RayHits},
+        collision::{Collider, ColliderParent, Collisions, Sensor},
+        spatial_query::{RayCaster, RayHits, ShapeCaster, ShapeHits},
     },
+    SubstepSchedule, SubstepSet,
 };
 use serde::{Deserialize, Serialize};
 
@@ -65,21 +32,32 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(
-            PreUpdate,
-            (player_init_system, init_local_player).after(ClientSet::Receive),
-        )
-        .replicate::<PlayerColor>()
-        .replicate::<Player>()
-        .add_client_event::<MoveDirection>(ChannelKind::Ordered)
-        .add_systems(
-            Update,
-            (
-                (movement_system, handle_players_controls).run_if(has_authority), // Runs only on the server or a single player.
-                // player_rotation,
-                input_system.run_if(not(fly_view)),
-            ),
-        );
+        app.replicate::<PlayerColor>()
+            .replicate::<Player>()
+            .add_client_event::<MovePlayer>(ChannelKind::Ordered)
+            .add_client_event::<RotatePlayer>(ChannelKind::Ordered)
+            .add_systems(
+                PreUpdate,
+                (player_init_system, init_local_player).after(ClientSet::Receive),
+            )
+            .add_systems(
+                Update,
+                ((
+                    input_system.run_if(not(fly_view)),
+                    update_grounded,
+                    apply_gravity,
+                    movement_system,
+                    apply_movement_damping,
+                    apply_offset,
+                )
+                    .chain()
+                    .run_if(has_authority),),
+            )
+            .add_systems(
+                // Run collision handling in substep schedule
+                SubstepSchedule,
+                kinematic_controller_collisions.in_set(SubstepSet::SolveUserConstraints),
+            );
     }
 }
 
@@ -96,10 +74,119 @@ impl Default for Player {
 }
 
 #[derive(Debug, Default, Deserialize, Event, Serialize)]
-pub struct MoveDirection(pub Vec3);
+pub enum MovePlayer {
+    Move(Vec3),
+    #[default]
+    Jump,
+}
+
+#[derive(Debug, Default, Deserialize, Event, Serialize)]
+pub struct RotatePlayer(pub Quat);
 
 #[derive(Component, Deserialize, Serialize, Default)]
 pub struct PlayerColor(pub Color);
+
+/// A marker component indicating that an entity is using a character controller.
+#[derive(Component)]
+pub struct CharacterController;
+
+/// A marker component indicating that an entity is on the ground.
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct Grounded;
+/// The acceleration used for character movement.
+#[derive(Component)]
+pub struct MovementAcceleration(Scalar);
+
+/// The damping factor used for slowing down movement.
+#[derive(Component)]
+pub struct MovementDampingFactor(Scalar);
+
+/// The strength of a jump.
+#[derive(Component)]
+pub struct JumpImpulse(Scalar);
+
+/// The gravitational acceleration used for a character controller.
+#[derive(Component)]
+pub struct ControllerGravity(Vec3);
+
+/// The maximum angle a slope can have for a character controller
+/// to be able to climb and jump. If the slope is steeper than this angle,
+/// the character will slide down.
+#[derive(Component)]
+pub struct MaxSlopeAngle(Scalar);
+
+const OFFSET: f32 = 1.0;
+
+/// A bundle that contains the components needed for a basic
+/// kinematic character controller.
+#[derive(Bundle)]
+pub struct CharacterControllerBundle {
+    character_controller: CharacterController,
+    rigid_body: RigidBody,
+    collider: Collider,
+    ground_caster: RayCaster,
+    gravity: ControllerGravity,
+    movement: MovementBundle,
+}
+
+#[derive(Bundle)]
+pub struct MovementBundle {
+    acceleration: MovementAcceleration,
+    damping: MovementDampingFactor,
+    jump_impulse: JumpImpulse,
+    max_slope_angle: MaxSlopeAngle,
+}
+
+impl MovementBundle {
+    pub const fn new(
+        acceleration: Scalar,
+        damping: Scalar,
+        jump_impulse: Scalar,
+        max_slope_angle: Scalar,
+    ) -> Self {
+        Self {
+            acceleration: MovementAcceleration(acceleration),
+            damping: MovementDampingFactor(damping),
+            jump_impulse: JumpImpulse(jump_impulse),
+            max_slope_angle: MaxSlopeAngle(max_slope_angle),
+        }
+    }
+}
+
+impl Default for MovementBundle {
+    fn default() -> Self {
+        Self::new(30.0, 0.9, 7.0, PI * 0.45)
+    }
+}
+
+impl CharacterControllerBundle {
+    pub fn new(collider: Collider, gravity: Vector) -> Self {
+        // Create shape caster as a slightly smaller version of collider
+        // let mut caster_shape = collider.clone();
+        // caster_shape.set_scale(Vector::ONE * 0.99, 10);
+
+        Self {
+            character_controller: CharacterController,
+            rigid_body: RigidBody::Kinematic,
+            collider,
+            ground_caster: RayCaster::new(Vec3::ZERO, Direction3d::NEG_Y),
+            gravity: ControllerGravity(gravity),
+            movement: MovementBundle::default(),
+        }
+    }
+
+    pub fn with_movement(
+        mut self,
+        acceleration: Scalar,
+        damping: Scalar,
+        jump_impulse: Scalar,
+        max_slope_angle: Scalar,
+    ) -> Self {
+        self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
+        self
+    }
+}
 
 #[derive(Bundle, Default)]
 pub struct PlayerBundle {
@@ -108,6 +195,18 @@ pub struct PlayerBundle {
     pub transform: Transform,
     pub color: PlayerColor,
     pub inventory: Inventory,
+}
+
+impl PlayerBundle {
+    pub fn new(client_id: ClientId, color: Color) -> Self {
+        Self {
+            player: Player(client_id),
+            replication: Replication,
+            transform: Transform::from_xyz(0.0, 40.0, 0.0),
+            color: PlayerColor(color),
+            inventory: Inventory::default(),
+        }
+    }
 }
 
 #[derive(Component, Default)]
@@ -127,13 +226,12 @@ fn player_init_system(
             ..Default::default()
         });
         commands.entity(entity).insert((
-            RigidBody::Kinematic,
-            Collider::capsule(1.0, 0.4),
-            GlobalTransform::default(),
-            VisibilityBundle::default(),
-            RayCaster::new(Vec3::ZERO, Direction3d::NEG_Y),
             mesh_handle,
             standard_material_handle,
+            GlobalTransform::default(),
+            VisibilityBundle::default(),
+            CharacterControllerBundle::new(Collider::capsule(1.0, 0.4), Vector::NEG_Y * 9.81 * 2.0)
+                .with_movement(30.0, 0.92, 7.0, (30.0 as Scalar).to_radians()),
         ));
     }
 }
@@ -176,9 +274,8 @@ fn init_local_player(
 //     player_transform.rotation = val;
 // }
 
-/// Reads player inputs and sends [`MoveCommandEvents`]
 fn input_system(
-    mut move_events: EventWriter<MoveDirection>,
+    mut move_events: EventWriter<MovePlayer>,
     input: Res<ButtonInput<KeyCode>>,
     player: Query<&Transform, With<LocalPLayer>>,
 ) {
@@ -194,46 +291,192 @@ fn input_system(
         direction += *player_transform.left();
     }
     if input.pressed(KeyCode::KeyW) {
+        println!("W");
         direction += *player_transform.forward();
     }
     if input.pressed(KeyCode::KeyS) {
+        println!("S");
         direction += *player_transform.back();
     }
+
     if direction != Vec3::ZERO {
-        move_events.send(MoveDirection(direction.normalize_or_zero()));
+        move_events.send(MovePlayer::Move(direction.normalize_or_zero()));
+    }
+
+    if input.just_pressed(KeyCode::Space) {
+        println!("Jump");
+        move_events.send(MovePlayer::Jump);
     }
 }
 
-/// Mutates [`PlayerPosition`] based on [`MoveCommandEvents`].
-///
-/// Fast-paced games usually you don't want to wait until server send a position back because of the latency.
-/// But this example just demonstrates simple replication concept.
 fn movement_system(
     time: Res<Time>,
-    mut move_events: EventReader<FromClient<MoveDirection>>,
-    mut players: Query<(&Player, &mut Transform)>,
+    mut move_events: EventReader<FromClient<MovePlayer>>,
+    // mut players: Query<(&Player, &mut LinearVelocity)>,
+    mut controllers: Query<(
+        &Player,
+        &MovementAcceleration,
+        &JumpImpulse,
+        &mut LinearVelocity,
+        Has<Grounded>,
+    )>,
 ) {
-    const MOVE_SPEED: f32 = 3.0;
     for FromClient { client_id, event } in move_events.read() {
-        for (player, mut transform) in &mut players {
+        for (player, movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
+            &mut controllers
+        {
             if *client_id == player.0 {
-                transform.translation += event.0 * time.delta_seconds() * MOVE_SPEED;
+                match event {
+                    MovePlayer::Move(direction) => {
+                        linear_velocity.0 +=
+                            *direction * movement_acceleration.0 * time.delta_seconds();
+                    }
+                    MovePlayer::Jump => {
+                        if is_grounded {
+                            linear_velocity.y = jump_impulse.0;
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-fn handle_players_controls(
-    mut players: Query<(&RayCaster, &RayHits, &mut LinearVelocity, &Transform), With<Player>>,
+/// Updates the [`Grounded`] status for character controllers.
+fn update_grounded(
+    mut commands: Commands,
+    mut query: Query<
+        (
+            Entity,
+            &RayCaster,
+            &RayHits,
+            &Rotation,
+            Option<&MaxSlopeAngle>,
+        ),
+        With<CharacterController>,
+    >,
 ) {
-    for (ray, hits, mut velocity, transform) in players.iter_mut() {
+    for (entity, ray, hits, rotation, max_slope_angle) in &mut query {
+        let is_grounded = hits.iter().any(|hit| hit.time_of_impact.round() == OFFSET);
+
+        if is_grounded {
+            commands.entity(entity).insert(Grounded);
+        } else {
+            commands.entity(entity).remove::<Grounded>();
+        }
+    }
+}
+
+fn apply_gravity(
+    time: Res<Time>,
+    mut controllers: Query<(&ControllerGravity, &mut LinearVelocity)>,
+) {
+    // Precision is adjusted so that the example works with
+    // both the `f32` and `f64` features. Otherwise you don't need this.
+    // let delta_time = time.delta_seconds_f64().adjust_precision();
+
+    // for (gravity, mut linear_velocity) in &mut controllers {
+    //     linear_velocity.0 += gravity.0 * delta_time;
+    // }
+}
+
+/// Slows down movement in the XZ plane.
+fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>) {
+    for (damping_factor, mut linear_velocity) in &mut query {
+        // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
+        linear_velocity.x *= damping_factor.0;
+        linear_velocity.z *= damping_factor.0;
+    }
+}
+
+fn apply_offset(
+    time: Res<Time>,
+    mut character_controllers: Query<
+        (&RayCaster, &RayHits, &mut LinearVelocity),
+        With<CharacterController>,
+    >,
+) {
+    for (ray, hits, mut velocity) in &mut character_controllers {
         for hit in hits.iter() {
-            println!(
-                "Hit entity {:?} at {} with normal {}",
-                hit.entity,
-                ray.origin + *ray.direction * hit.time_of_impact,
-                hit.normal,
-            );
+            let offset = hit.time_of_impact - OFFSET;
+
+            let vel = velocity.0.dot(*ray.direction);
+            let strength = 50.0;
+            let dampening = 15.0;
+            let force = (offset * strength) - (vel * dampening);
+            velocity.0 += *ray.direction * (force * time.delta_seconds());
+        }
+    }
+}
+
+fn kinematic_controller_collisions(
+    collisions: Res<Collisions>,
+    collider_parents: Query<&ColliderParent, Without<Sensor>>,
+    mut character_controllers: Query<
+        (
+            &RigidBody,
+            &mut Position,
+            &Rotation,
+            &mut LinearVelocity,
+            Option<&MaxSlopeAngle>,
+        ),
+        With<CharacterController>,
+    >,
+) {
+    // Iterate through collisions and move the kinematic body to resolve penetration
+    for contacts in collisions.iter() {
+        // If the collision didn't happen during this substep, skip the collision
+        if !contacts.during_current_substep {
+            continue;
+        }
+
+        // Get the rigid body entities of the colliders (colliders could be children)
+        let Ok([collider_parent1, collider_parent2]) =
+            collider_parents.get_many([contacts.entity1, contacts.entity2])
+        else {
+            continue;
+        };
+
+        // Get the body of the character controller and whether it is the first
+        // or second entity in the collision.
+        let is_first: bool;
+        let (rb, mut position, rotation, mut linear_velocity, max_slope_angle) =
+            if let Ok(character) = character_controllers.get_mut(collider_parent1.get()) {
+                is_first = true;
+                character
+            } else if let Ok(character) = character_controllers.get_mut(collider_parent2.get()) {
+                is_first = false;
+                character
+            } else {
+                continue;
+            };
+
+        // This system only handles collision response for kinematic character controllers
+        if !rb.is_kinematic() {
+            continue;
+        }
+
+        // Iterate through contact manifolds and their contacts.
+        // Each contact in a single manifold shares the same contact normal.
+        for manifold in contacts.manifolds.iter() {
+            let normal = if is_first {
+                -manifold.global_normal1(rotation)
+            } else {
+                -manifold.global_normal2(rotation)
+            };
+
+            // Solve each penetrating contact in the manifold
+            for contact in manifold.contacts.iter().filter(|c| c.penetration > 0.0) {
+                position.0 += normal * contact.penetration;
+            }
+
+            // If the slope isn't too steep to walk on but the character
+            // is falling, reset vertical velocity.
+            if max_slope_angle.is_some_and(|angle| normal.angle_between(Vector::Y).abs() <= angle.0)
+                && linear_velocity.y < 0.0
+            {
+                linear_velocity.y = linear_velocity.y.max(0.0);
+            }
         }
     }
 }

@@ -1,11 +1,10 @@
 use bevy::{
-    a11y::accesskit::Size,
     app::{Plugin, Startup, Update},
     core_pipeline::core_3d::Camera3dBundle,
     ecs::{
         component::Component,
-        event::EventReader,
-        query::{With, Without},
+        event::{EventReader, EventWriter},
+        query::With,
         schedule::{
             common_conditions::{in_state, not},
             IntoSystemConfigs, OnEnter,
@@ -16,10 +15,8 @@ use bevy::{
     input::{keyboard::KeyCode, mouse::MouseMotion, ButtonInput},
     log::{error, warn},
     math::{EulerRot, Quat, Vec3},
-    render::{
-        camera::{Camera, OrthographicProjection},
-        color::Color,
-    },
+    reflect::Reflect,
+    render::color::Color,
     text::TextStyle,
     time::Time,
     transform::components::{GlobalTransform, Transform},
@@ -29,13 +26,12 @@ use bevy::{
     },
     window::{CursorGrabMode, PrimaryWindow, Window},
 };
-use bevy_xpbd_3d::math::PI;
 
 use crate::GameState;
 
 use super::{
     network::LocalPlayerId,
-    player::{LocalPLayer, Player},
+    player::{Player, RotatePlayer},
 };
 
 pub struct CameraPlugin;
@@ -44,6 +40,8 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(Startup, spawn_camera)
             .insert_resource(FlyView(false))
+            .register_type::<FlyView>()
+            .register_type::<FPSCamera>()
             .add_systems(OnEnter(GameState::Game), crosshair_setup)
             .add_systems(
                 Update,
@@ -59,7 +57,7 @@ impl Plugin for CameraPlugin {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct FPSCamera {
     pub sensitivity: f32,
     pub cursor_lock: bool,
@@ -120,7 +118,7 @@ fn crosshair_setup(mut commands: Commands) {
         });
 }
 
-#[derive(Resource)]
+#[derive(Resource, Reflect)]
 pub struct FlyView(bool);
 
 pub fn fly_view(res: Res<FlyView>) -> bool {
@@ -147,8 +145,9 @@ fn camera_following(
 
 fn camera_rotation(
     mut camera: Query<(&mut Transform, &FPSCamera)>,
-    mut player: Query<&mut Transform, (With<LocalPLayer>, Without<FPSCamera>)>,
+    mut rotate_event: EventWriter<RotatePlayer>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
+    fly_view: Res<FlyView>,
     mut motion: EventReader<MouseMotion>,
 ) {
     let Ok((mut camera_transform, camera)) = camera.get_single_mut() else {
@@ -173,6 +172,10 @@ fn camera_rotation(
 
             let y_quat = Quat::from_axis_angle(Vec3::Y, yaw);
             let x_quat = Quat::from_axis_angle(Vec3::X, pitch);
+
+            if !fly_view.0 {
+                rotate_event.send(RotatePlayer(y_quat));
+            }
 
             camera_transform.rotation = y_quat * x_quat;
         }

@@ -4,9 +4,11 @@
 use bevy::prelude::*;
 use bevy::winit::{UpdateMode, WinitSettings};
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
+use bevy_inspector_egui::inspector_egui_impls::InspectorPrimitive;
 use bevy_inspector_egui::quick::{
     AssetInspectorPlugin, ResourceInspectorPlugin, WorldInspectorPlugin,
 };
+use bevy_inspector_egui::InspectorOptions;
 use bevy_mod_picking::DefaultPickingPlugins;
 
 use bevy_replicon::client::ClientSet;
@@ -27,7 +29,7 @@ use plugins::network::NetworkPlugin;
 use plugins::{
     camera::CameraPlugin,
     crafting::CraftingPlugin,
-    player::{MoveDirection, Player, PlayerColor, PlayerPlugin},
+    player::{MovePlayer, Player, PlayerColor, PlayerPlugin},
 };
 
 pub mod args;
@@ -45,10 +47,10 @@ fn main() {
         .register_type::<WindowContext>()
         .init_resource::<WindowContext>()
         // TODO: Remove `WinitSettings`
-        .insert_resource(WinitSettings {
-            focused_mode: UpdateMode::Continuous,
-            unfocused_mode: UpdateMode::Continuous,
-        })
+        // .insert_resource(WinitSettings {
+        //     focused_mode: UpdateMode::Continuous,
+        //     unfocused_mode: UpdateMode::Continuous,
+        // })
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()))
         .add_plugins((
@@ -77,7 +79,6 @@ fn main() {
         ))
         .init_state::<GameState>()
         .replicate::<Transform>()
-        .add_plugins(AssetInspectorPlugin::<Workbench>::default())
         .run()
 }
 

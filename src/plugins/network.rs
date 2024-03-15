@@ -161,13 +161,7 @@ fn show_menu(
 
                         event.send(NetworkSpawnStep(ClientId::SERVER));
 
-                        commands.spawn(PlayerBundle {
-                            player: Player(ClientId::SERVER),
-                            replication: Replication,
-                            transform: Transform::from_xyz(0.0, 40.0, 0.0),
-                            color: PlayerColor(Color::GREEN),
-                            ..Default::default()
-                        });
+                        commands.spawn(PlayerBundle::new(ClientId::SERVER, Color::GREEN));
 
                         // let entity = commands
                         //     .spawn(CursorBundle {
@@ -237,13 +231,7 @@ fn server_event_system(mut commands: Commands, mut server_event: EventReader<Ser
                 let g = ((client_id.get() % 27) as f32) / 27.0;
                 let b = ((client_id.get() % 39) as f32) / 39.0;
 
-                commands.spawn(PlayerBundle {
-                    player: Player(*client_id),
-                    replication: Replication,
-                    color: PlayerColor(Color::rgb(r, g, b)),
-                    transform: Transform::from_xyz(0.0, 40.0, 0.0),
-                    ..Default::default()
-                });
+                commands.spawn(PlayerBundle::new(*client_id, Color::rgb(r, g, b)));
 
                 // let entity = commands
                 //     .spawn(CursorBundle {

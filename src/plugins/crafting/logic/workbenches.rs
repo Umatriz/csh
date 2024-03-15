@@ -1,6 +1,6 @@
 use bevy::{
     app::Plugin,
-    asset::{Asset, AssetApp, AssetLoader, Assets, AsyncReadExt},
+    asset::{Asset, AssetApp, Assets, AsyncReadExt},
     ecs::system::Res,
     reflect::{std_traits::ReflectDefault, Reflect},
     utils::hashbrown::HashMap,
