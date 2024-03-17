@@ -47,10 +47,10 @@ fn main() {
         .register_type::<WindowContext>()
         .init_resource::<WindowContext>()
         // TODO: Remove `WinitSettings`
-        // .insert_resource(WinitSettings {
-        //     focused_mode: UpdateMode::Continuous,
-        //     unfocused_mode: UpdateMode::Continuous,
-        // })
+        .insert_resource(WinitSettings {
+            focused_mode: UpdateMode::Continuous,
+            unfocused_mode: UpdateMode::Continuous,
+        })
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()))
         .add_plugins((

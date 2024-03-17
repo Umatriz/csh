@@ -5,14 +5,17 @@ use bevy::{
         schedule::OnEnter,
         system::{Commands, ResMut},
     },
-    math::{primitives::Plane3d, Vec3},
+    math::{
+        primitives::{Cuboid, Plane3d, Rectangle},
+        Vec3,
+    },
     pbr::{
         CascadeShadowConfigBuilder, DirectionalLight, DirectionalLightBundle, PbrBundle,
         StandardMaterial,
     },
     render::{
         color::Color,
-        mesh::{Mesh, Meshable},
+        mesh::{shape::Cube, Mesh, Meshable},
     },
     transform::components::Transform,
 };
@@ -41,6 +44,66 @@ fn setup(
                 ..Default::default()
             }),
             // transform: Transform::from_xyz(0.0, -15.0, 0.0),
+            ..Default::default()
+        },
+    ));
+
+    let mesh = Cuboid::new(5.0, 5.0, 5.0).mesh();
+    commands.spawn((
+        RigidBody::Static,
+        Collider::convex_hull_from_mesh(&mesh).unwrap(),
+        PbrBundle {
+            mesh: meshes.add(mesh),
+            material: standard_materials.add(StandardMaterial {
+                base_color: Color::GRAY,
+                ..Default::default()
+            }),
+            transform: Transform::from_xyz(0.0, 2.5, 0.0),
+            ..Default::default()
+        },
+    ));
+
+    let mesh = Cuboid::new(1.0, 1.0, 1.0).mesh();
+    commands.spawn((
+        RigidBody::Static,
+        Collider::convex_hull_from_mesh(&mesh).unwrap(),
+        PbrBundle {
+            mesh: meshes.add(mesh),
+            material: standard_materials.add(StandardMaterial {
+                base_color: Color::GRAY,
+                ..Default::default()
+            }),
+            transform: Transform::from_xyz(10.0, 0.5, 0.0),
+            ..Default::default()
+        },
+    ));
+
+    let mesh = Cuboid::new(1.0, 1.0, 1.0).mesh();
+    commands.spawn((
+        RigidBody::Dynamic,
+        Collider::convex_hull_from_mesh(&mesh).unwrap(),
+        PbrBundle {
+            mesh: meshes.add(mesh),
+            material: standard_materials.add(StandardMaterial {
+                base_color: Color::GRAY,
+                ..Default::default()
+            }),
+            transform: Transform::from_xyz(10.0, 10.0, 0.0),
+            ..Default::default()
+        },
+    ));
+
+    let mesh = Cuboid::new(1.0, 1.0, 1.0).mesh();
+    commands.spawn((
+        RigidBody::Dynamic,
+        Collider::convex_hull_from_mesh(&mesh).unwrap(),
+        PbrBundle {
+            mesh: meshes.add(mesh),
+            material: standard_materials.add(StandardMaterial {
+                base_color: Color::GRAY,
+                ..Default::default()
+            }),
+            transform: Transform::from_xyz(10.0, 5.0, 0.0),
             ..Default::default()
         },
     ));

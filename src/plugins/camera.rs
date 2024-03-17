@@ -5,6 +5,7 @@ use bevy::{
         component::Component,
         event::{EventReader, EventWriter},
         query::With,
+        reflect::ReflectResource,
         schedule::{
             common_conditions::{in_state, not},
             IntoSystemConfigs, OnEnter,
@@ -118,7 +119,8 @@ fn crosshair_setup(mut commands: Commands) {
         });
 }
 
-#[derive(Resource, Reflect)]
+#[derive(Resource, Reflect, Default)]
+#[reflect(Resource)]
 pub struct FlyView(bool);
 
 pub fn fly_view(res: Res<FlyView>) -> bool {
