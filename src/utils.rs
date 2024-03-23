@@ -11,7 +11,7 @@ pub fn vec_lerp(a: Vec2, b: Vec2, t: f32) -> Vec2 {
     a * (1.0 - t) + b * t
 }
 
-pub fn inv_lerp(a: f32, b: f32, v: f32) -> f32 {
+pub fn inv_lerp(a: f64, b: f64, v: f64) -> f64 {
     (v - a) / (b - a)
 }
 

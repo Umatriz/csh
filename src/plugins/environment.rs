@@ -6,7 +6,7 @@ use bevy::{
         system::{Commands, ResMut},
     },
     math::{
-        primitives::{Cuboid, Plane3d, Rectangle},
+        primitives::{Cuboid, Plane3d},
         Vec3,
     },
     pbr::{
@@ -15,7 +15,7 @@ use bevy::{
     },
     render::{
         color::Color,
-        mesh::{shape::Cube, Mesh, Meshable},
+        mesh::{Mesh, Meshable},
     },
     transform::components::Transform,
 };

@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use self::{
     logic::{
-        Inventory, Item, ItemBundle, ItemEvent, ItemKind, ItemProperties, ItemStack,
+        Inventory, Item, ItemEvent, ItemKind, ItemProperties, ItemStack,
         WorkbenchPlugin,
     },
     systems::WindowSystemsPlugin,

@@ -208,7 +208,7 @@ macro_rules! __type_check {
         }
     );
 }
-use __type_check;
+
 
 macro_rules! __type_check_muncher {
     (
@@ -367,7 +367,7 @@ macro_rules! __type_check_muncher {
         { $($output)* }
     );
 }
-use __type_check_muncher;
+
 
 asset_project! {
     #[derive(Asset, TypePath)]

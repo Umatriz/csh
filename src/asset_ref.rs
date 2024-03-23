@@ -1,13 +1,11 @@
 use std::hash::Hash;
 
 use bevy::{
-    asset::{Asset, AsyncReadExt, Handle},
-    reflect::{std_traits::ReflectDefault, Reflect, TypePath},
+    asset::{Asset, Handle},
+    reflect::{std_traits::ReflectDefault, Reflect},
     utils::hashbrown::HashMap,
 };
 use serde::{Deserialize, Serialize};
-
-use crate::plugins::crafting::logic::Item;
 
 use self::macros::{impl_loadable_for_tuple, impl_loadable_for_type};
 

@@ -26,11 +26,11 @@ use bevy_mod_picking::{
     PickableBundle,
 };
 
-use crate::{item, item_kind, layout, utils::squared_distance, GameState};
+use crate::{item, item_kind, utils::squared_distance, GameState};
 
 use super::{
     crafting::{
-        logic::{Inventory, Item, ItemBundle, ItemStack},
+        logic::{Inventory, Item, ItemStack},
         show_item,
     },
     player::Player,

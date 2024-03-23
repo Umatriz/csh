@@ -136,7 +136,7 @@ fn camera_following(
     players: Query<(&GlobalTransform, &Player)>,
     local_player: Res<LocalPlayerId>,
 ) {
-    if let Ok((mut camera_transform, camera)) = camera.get_single_mut() {
+    if let Ok((mut camera_transform, _camera)) = camera.get_single_mut() {
         for (player_transform, player) in players.iter() {
             if player.0 == local_player.0 {
                 camera_transform.translation = player_transform.translation();

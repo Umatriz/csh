@@ -11,22 +11,16 @@ use bevy_replicon::{
 };
 use bevy_xpbd_3d::{
     components::{LinearVelocity, Position, RigidBody, Rotation},
-    math::{AdjustPrecision, Quaternion, Scalar, Vector, PI},
+    math::{AdjustPrecision, Scalar, Vector, PI},
     plugins::{
         collision::{Collider, ColliderParent, Collisions, Sensor},
-        spatial_query::{RayCaster, RayHits, ShapeCaster, ShapeHits},
+        spatial_query::{RayCaster, RayHits},
     },
     SubstepSchedule, SubstepSet,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::GameState;
-
-use super::{
-    camera::{fly_view, FPSCamera},
-    crafting::logic::Inventory,
-    network::LocalPlayerId,
-};
+use super::{camera::fly_view, crafting::logic::Inventory, network::LocalPlayerId};
 
 pub struct PlayerPlugin;
 
@@ -150,8 +144,6 @@ pub struct ControllerGravity(Vec3);
 /// the character will slide down.
 #[derive(Component)]
 pub struct MaxSlopeAngle(Scalar);
-
-const OFFSET: f32 = 1.0;
 
 /// A bundle that contains the components needed for a basic
 /// kinematic character controller.
@@ -402,7 +394,7 @@ fn update_grounded(
         With<CharacterController>,
     >,
 ) {
-    for (entity, ray, hits, rotation, max_slope_angle) in &mut query {
+    for (entity, _ray, hits, _rotation, max_slope_angle) in &mut query {
         let is_grounded = hits.iter().any(|hit| {
             if let Some(angle) = max_slope_angle {
                 hit.normal.angle_between(Vector::Y).abs() <= angle.0
@@ -411,7 +403,7 @@ fn update_grounded(
             }
         });
 
-        if dbg!(is_grounded) {
+        if is_grounded {
             commands.entity(entity).insert(Grounded);
         } else {
             commands.entity(entity).remove::<Grounded>();

@@ -11,17 +11,20 @@ paste = "1.0.14"
 ndarray = "0.15.6"
 clap = { version = "4.4", features = ["derive"] }
 serde = "1.0"
+bytemuck = "1.14.1"
+noise = "0.8.2"
+ron = "0.8.1"
+rand = "0.8.5"
+egui_extras = { version = "0.26.2", features = ["all_loaders", "image"] }
 
 bevy_xpbd_3d = "0.4.2"
 bevy_mod_picking = { version = "0.18.1", features = ["backend_egui"] }
 bevy_asset_loader = { version = "0.20.0", features = ["2d"] }
 bevy-inspector-egui = "0.23.4"
-bytemuck = "1.14.1"
 bevy_replicon = "0.24.1"
 bevy_replicon_renet = "0.1"
-bevy_common_assets = { version = "0.10.0", features = ["ron"], default-features = false }
-ron = "0.8.1"
 bevy_replicon_snap = "0.2.0"
+bevy_common_assets = { version = "0.10.0", features = ["ron"], default-features = false }
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!
