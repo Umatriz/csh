@@ -1,45 +1,14 @@
-use std::sync::Arc;
-
 use bevy::prelude::*;
-use bevy_inspector_egui::{
-    bevy_egui::EguiContexts,
-    egui::{self, ColorImage, ImageData, TextureOptions},
-    inspector_options::ReflectInspectorOptions,
-    InspectorOptions,
-};
+use bevy_inspector_egui::{inspector_options::ReflectInspectorOptions, InspectorOptions};
 use ndarray::Array2;
 use noise::{NoiseFn, Perlin};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::{
-    debugging::{show_window, InspectorWindowsAppExt},
-    utils::inv_lerp,
-    InspectorWindows,
-};
+use crate::utils::inv_lerp;
 
 pub fn perlin_noise(app: &mut App) {
     app.init_resource::<NoiseConfig>()
-        .register_type::<NoiseConfig>()
-        .register_window::<NoiseWindow>()
-        .add_systems(Update, noise_window);
-}
-
-#[derive(TypePath)]
-enum NoiseWindow {}
-
-pub fn noise_window(
-    mut contexts: EguiContexts,
-    mut noise_config: ResMut<NoiseConfig>,
-    type_registry: Res<AppTypeRegistry>,
-    mut inspector_windows: ResMut<InspectorWindows>,
-) {
-    show_window::<NoiseWindow, _>(&mut inspector_windows, contexts.ctx_mut(), |ui| {
-        bevy_inspector_egui::reflect_inspector::ui_for_value(
-            noise_config.as_mut(),
-            ui,
-            &type_registry.read(),
-        );
-    });
+        .register_type::<NoiseConfig>();
 }
 
 #[derive(Reflect, Resource, InspectorOptions, Clone)]

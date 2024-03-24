@@ -6,9 +6,6 @@ use bevy::prelude::*;
 use bevy::winit::{UpdateMode, WinitSettings};
 use bevy_inspector_egui::bevy_egui::{EguiContexts, EguiPlugin};
 
-use bevy_inspector_egui::egui::Ui;
-use bevy_inspector_egui::quick::{ResourceInspectorPlugin, WorldInspectorPlugin};
-
 use bevy_mod_picking::DefaultPickingPlugins;
 
 use bevy_replicon::core::replication_rules::AppReplicationExt;
@@ -22,7 +19,6 @@ use debugging::InspectorPlugin;
 use plugins::assets::AssetsLoadingPlugin;
 
 use plugins::environment;
-use plugins::gen::chunking::{ChunkingPlugin, CreatedPoints};
 use plugins::gen::GenPlugins;
 // use plugins::cursor::CursorPlugin;
 use plugins::network::NetworkPlugin;

@@ -15,7 +15,7 @@ use bevy::{
 };
 use bevy_inspector_egui::{
     bevy_egui::{EguiContext, EguiPlugin},
-    bevy_inspector,
+    bevy_inspector::{self},
     egui::{self, Context, Ui},
     DefaultInspectorConfigPlugin,
 };
@@ -111,7 +111,7 @@ fn ui_for_inspector_windows(world: &mut World, ui: &mut Ui) {
     };
 
     for (name, state) in windows.windows.iter_mut() {
-        ui.toggle_value(state, name.0);
+        ui.checkbox(state, name.0);
     }
 }
 

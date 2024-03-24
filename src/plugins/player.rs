@@ -20,6 +20,8 @@ use bevy_xpbd_3d::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::plugins::gen::chunking::ChunksRenderer;
+
 use super::{camera::fly_view, crafting::logic::Inventory, network::LocalPlayerId};
 
 pub struct PlayerPlugin;
@@ -268,6 +270,7 @@ fn player_init_system(
             ..Default::default()
         });
         commands.entity(entity).insert((
+            ChunksRenderer,
             Name::new("Player"),
             mesh_handle,
             standard_material_handle,
@@ -329,11 +332,9 @@ fn input_system(
         direction += *player_transform.left();
     }
     if input.pressed(KeyCode::KeyW) {
-        println!("W");
         direction += *player_transform.forward();
     }
     if input.pressed(KeyCode::KeyS) {
-        println!("S");
         direction += *player_transform.back();
     }
 
@@ -342,7 +343,6 @@ fn input_system(
     }
 
     if input.just_pressed(KeyCode::Space) {
-        println!("Jump");
         move_events.send(MovePlayer::Jump);
     }
 }
